@@ -23,7 +23,7 @@
 #include "config.h"
 #include <ImprovWiFiLibrary.h>   // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.3.0"
+#define FIRMWARE_VERSION "1.3.1"
 ImprovWiFi improv(&Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -318,12 +318,21 @@ $pick = Read-Host 'Type its number and press Enter'
 $n = 0
 if (-not [int]::TryParse("$pick", [ref]$n) -or $n -lt 1 -or $n -gt $drivers.Count) { Write-Host 'That number is not in the list. Paste the line again to retry.' -ForegroundColor Yellow; return }
 $driver = $drivers[$n - 1]
+# Prefer the bridge's name, which keeps working if the router gives it a new IP address.
+$addr = $ip
+$nm = '%NAME%.local'
+try { $t = New-Object Net.Sockets.TcpClient; if ($t.ConnectAsync($nm, 9100).Wait(4000)) { $addr = $nm }; $t.Close() } catch {}
+if ($addr -eq $nm) { Write-Host "Using the bridge's name ($nm), so it keeps working even if its IP address changes." }
+else { Write-Host "Couldn't reach $nm by name, using the IP address $ip. Tip: reserve this IP in your router so it never changes." -ForegroundColor Yellow }
 try {
-  if (-not (Get-PrinterPort -Name $ip -ErrorAction SilentlyContinue)) { Add-PrinterPort -Name $ip -PrinterHostAddress $ip -PortNumber 9100 -ErrorAction Stop }
+  if (-not (Get-PrinterPort -Name $addr -ErrorAction SilentlyContinue)) { Add-PrinterPort -Name $addr -PrinterHostAddress $addr -PortNumber 9100 -ErrorAction Stop }
+  if ($addr -ne $ip) {
+    Get-Printer | Where-Object { $_.PortName -eq $ip -and $_.Name -ne $name } | ForEach-Object {
+      Set-Printer -Name $_.Name -PortName $addr; Write-Host ("Also switched '" + $_.Name + "' to $addr") } }
   if (Get-Printer -Name $name -ErrorAction SilentlyContinue) {
     Get-PrintJob -PrinterName $name -ErrorAction SilentlyContinue | Remove-PrintJob -ErrorAction SilentlyContinue
     Remove-Printer -Name $name -ErrorAction Stop }
-  Add-Printer -Name $name -DriverName $driver -PortName $ip -ErrorAction Stop
+  Add-Printer -Name $name -DriverName $driver -PortName $addr -ErrorAction Stop
 } catch { Write-Host ('Something went wrong: ' + $_.Exception.Message) -ForegroundColor Red; return }
 Write-Host ''
 Write-Host "Added '$name'." -ForegroundColor Green
@@ -336,6 +345,7 @@ Write-Host 'Sent a test page. Done! Choose "Label Printer (Wi-Fi)" when you prin
 void handleWinScript() {
   String sc = FPSTR(WIN_SCRIPT);
   sc.replace("%IP%", WiFi.localIP().toString());
+  sc.replace("%NAME%", BRIDGE_NAME);
   web.send(200, "text/plain", sc);
 }
 

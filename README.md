@@ -59,7 +59,7 @@ Open **https://btltech1.github.io/esp32-label-printer-bridge** in Chrome or Edge
    `irm http://192.168.1.50/windows.ps1 | iex`
 4. Type the number of your printer's driver, set the paper size to your labels, and click OK. A test page prints.
 
-You can read exactly what it does first: open `http://<bridge-ip>/windows.ps1` in your browser. It adds a Raw port 9100 and a printer called "Label Printer (Wi-Fi)". Running it again rebuilds that printer from scratch, which also fixes stuck jobs.
+You can read exactly what it does first: open `http://<bridge-ip>/windows.ps1` in your browser. It adds a Raw port 9100 and a printer called "Label Printer (Wi-Fi)". It points the printer at the bridge's name (`btl-printer.local`) when your PC can find it, so printing keeps working even if your router gives the bridge a new IP address (otherwise it uses the IP, and you should reserve that IP in your router). Running it again rebuilds that printer from scratch, which also fixes stuck jobs.
 
 **Windows, by hand**
 Settings → Printers & scanners → Add device → Add manually → "Add a printer using an IP address or hostname" → TCP/IP Device, the bridge's IP, untick "Query the printer" → if asked, Custom → Settings → Raw, port 9100, SNMP off → pick your printer's driver. If an old USB entry for the same printer gives trouble, add a new one rather than changing its port.
