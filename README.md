@@ -52,13 +52,17 @@ Open **https://btltech1.github.io/esp32-label-printer-bridge** in Chrome or Edge
 
 ## Add it to your computer
 
-**Windows 10/11**
-1. Settings → Bluetooth & devices → Printers & scanners → **Add device** → **Add manually**.
-2. Choose **Add a printer using an IP address or hostname**.
-3. Device type **TCP/IP Device**, address = the bridge's IP. Untick "Query the printer".
-4. If asked for more port details: **Custom → Settings → Protocol: Raw, Port: 9100**.
-5. Pick your printer's **normal driver** (install the manufacturer's driver first if it isn't listed).
-6. Print a test page.
+**Windows 10/11 (easiest, about 1 minute)**
+1. Install your printer's normal driver if you haven't (plug the printer into the PC by USB once, or run the maker's installer).
+2. Right-click the **Start** button → **Terminal (Admin)**.
+3. Paste the line shown on the bridge's page and press Enter. It looks like this, with your bridge's IP:
+   `irm http://192.168.1.50/windows.ps1 | iex`
+4. Type the number of your printer's driver, set the paper size to your labels, and click OK. A test page prints.
+
+You can read exactly what it does first: open `http://<bridge-ip>/windows.ps1` in your browser. It adds a Raw port 9100 and a printer called "Label Printer (Wi-Fi)". Running it again rebuilds that printer from scratch, which also fixes stuck jobs.
+
+**Windows, by hand**
+Settings → Printers & scanners → Add device → Add manually → "Add a printer using an IP address or hostname" → TCP/IP Device, the bridge's IP, untick "Query the printer" → if asked, Custom → Settings → Raw, port 9100, SNMP off → pick your printer's driver. If an old USB entry for the same printer gives trouble, add a new one rather than changing its port.
 
 **macOS**
 System Settings → Printers & Scanners → **Add Printer** → **IP** tab. Address = the bridge's IP, Protocol: **HP Jetdirect – Socket**, then choose your printer's driver.

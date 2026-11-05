@@ -23,7 +23,7 @@
 #include "config.h"
 #include <ImprovWiFiLibrary.h>   // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.2.0"
+#define FIRMWARE_VERSION "1.3.0"
 ImprovWiFi improv(&Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -295,16 +295,76 @@ h1{font-size:24px}.card{background:#fff;border:1px solid #ddd;border-radius:10px
 input{width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box;font:inherit}button{margin-top:14px;padding:12px 18px;border:0;border-radius:8px;background:#d9471f;color:#fff;font:600 16px system-ui;cursor:pointer}
 .ok{color:#137333;font-weight:600}.bad{color:#b3261e;font-weight:600}small{color:#666}code{background:#eee;padding:2px 5px;border-radius:4px}</style><h1>BTL Print Bridge</h1>)HTML";
 
-void handleRoot() {
-  String h = FPSTR(PAGE_HEAD);
-  h += "<div class=card><b>Printer:</b> ";
+// Windows setup script, served at /windows.ps1 with this bridge's IP filled in.
+// Run from an Administrator PowerShell:  irm http://<bridge-ip>/windows.ps1 | iex
+const char WIN_SCRIPT[] PROGMEM = R"PS(
+$ip = '%IP%'
+$name = 'Label Printer (Wi-Fi)'
+Write-Host ''
+Write-Host 'BTL Print Bridge: add your label printer over Wi-Fi' -ForegroundColor Cyan
+$me = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
+if (-not $me.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+  Write-Host 'This needs an Administrator window: right-click Start > Terminal (Admin), then paste the line again.' -ForegroundColor Yellow; return }
+$skip  = 'Microsoft|OneNote|Fax|XPS|PDF|Send To|Remote Desktop|Generic / Text'
+$label = 'ZPL|TSPL|EPL|Label|Thermal|Rollo|Zebra|RONGTA|Xprinter|MUNBYN|iDPRT|Phomemo|HPRT|POLONO|Jadens|Nelko|Beeprt|4BARCODE|TSC|Godex|DYMO|Brother QL|Arkscan|Zjiang'
+$all = @(Get-PrinterDriver | Where-Object { $_.Name -notmatch $skip } | Select-Object -ExpandProperty Name -Unique)
+$drivers = @($all | Where-Object { $_ -match $label }) + @($all | Where-Object { $_ -notmatch $label })
+if ($drivers.Count -eq 0) {
+  Write-Host "No printer drivers found. Install your label printer's driver first (plug the printer into this PC by USB once, or run the maker's installer), then run this again." -ForegroundColor Yellow; return }
+Write-Host ''
+Write-Host 'Which driver is for your label printer? (label printer drivers are listed first)'
+for ($i = 0; $i -lt $drivers.Count; $i++) { Write-Host ('  [{0}] {1}' -f ($i + 1), $drivers[$i]) }
+$pick = Read-Host 'Type its number and press Enter'
+$n = 0
+if (-not [int]::TryParse("$pick", [ref]$n) -or $n -lt 1 -or $n -gt $drivers.Count) { Write-Host 'That number is not in the list. Paste the line again to retry.' -ForegroundColor Yellow; return }
+$driver = $drivers[$n - 1]
+try {
+  if (-not (Get-PrinterPort -Name $ip -ErrorAction SilentlyContinue)) { Add-PrinterPort -Name $ip -PrinterHostAddress $ip -PortNumber 9100 -ErrorAction Stop }
+  if (Get-Printer -Name $name -ErrorAction SilentlyContinue) {
+    Get-PrintJob -PrinterName $name -ErrorAction SilentlyContinue | Remove-PrintJob -ErrorAction SilentlyContinue
+    Remove-Printer -Name $name -ErrorAction Stop }
+  Add-Printer -Name $name -DriverName $driver -PortName $ip -ErrorAction Stop
+} catch { Write-Host ('Something went wrong: ' + $_.Exception.Message) -ForegroundColor Red; return }
+Write-Host ''
+Write-Host "Added '$name'." -ForegroundColor Green
+Write-Host 'Last step: in the window that opens, set the paper size to your labels (for example 4 x 6 in / 100 x 150 mm) and click OK.'
+Start-Process rundll32.exe -ArgumentList "printui.dll,PrintUIEntry /e /n `"$name`"" -Wait
+Get-CimInstance Win32_Printer -Filter "Name='$name'" | Invoke-CimMethod -MethodName PrintTestPage | Out-Null
+Write-Host 'Sent a test page. Done! Choose "Label Printer (Wi-Fi)" when you print from any app.' -ForegroundColor Green
+)PS";
+
+void handleWinScript() {
+  String sc = FPSTR(WIN_SCRIPT);
+  sc.replace("%IP%", WiFi.localIP().toString());
+  web.send(200, "text/plain", sc);
+}
+
+String statusHtml() {
+  String h = "<b>Printer:</b> ";
   h += printerReady ? "<span class=ok>connected</span> " + htmlEsc(printerName) : String("<span class=bad>not connected</span>");
   h += "<br><b>Wi-Fi:</b> " + (setupMode ? String("setup mode") : htmlEsc(cfgSsid) + " &middot; " + WiFi.localIP().toString());
-  h += "<br><b>Jobs printed:</b> " + String(jobsPrinted) + "<br><b>Last event:</b> " + htmlEsc(lastEvent) + "</div>";
+  h += "<br><b>Jobs printed:</b> " + String(jobsPrinted) + "<br><b>Last event:</b> " + htmlEsc(lastEvent);
+  return h;
+}
+
+void handleStatus() { web.send(200, "text/html", statusHtml()); }
+
+void handleRoot() {
+  String h = FPSTR(PAGE_HEAD);
+  h += "<div class=card id=st>" + statusHtml() + "</div>"
+       "<script>setInterval(()=>fetch('/status').then(r=>r.text()).then(t=>document.getElementById('st').innerHTML=t).catch(()=>{}),3000)</script>";
   if (!setupMode) {
-    h += "<div class=card><b>Add to a computer</b><br><small>Windows: Settings &rarr; Printers &rarr; Add device &rarr; Add manually &rarr; "
-         "TCP/IP address <code>" + WiFi.localIP().toString() + "</code>, port <code>" + String(RAW_PRINT_PORT) +
-         "</code>, protocol Raw. Then choose your printer's normal driver.</small></div>";
+    String ip = WiFi.localIP().toString();
+    String cmd = "irm http://" + ip + "/windows.ps1 | iex";
+    h += "<div class=card><b>Add to a Windows PC</b> <small>(about 1 minute)</small><ol style=\"padding-left:20px;margin:8px 0\">"
+         "<li>Right-click the <b>Start</b> button &rarr; <b>Terminal (Admin)</b> and click Yes.</li>"
+         "<li>Copy this line, paste it into that window, and press Enter:<br>"
+         "<input id=cmd readonly value=\"" + cmd + "\" onclick=\"this.select()\" style=\"font-family:monospace;margin-top:6px\">"
+         "<button type=button onclick=\"var c=document.getElementById('cmd');c.select();document.execCommand('copy');this.textContent='Copied!'\">Copy</button></li>"
+         "<li>Type the number of your printer's driver, set your label size, done.</li></ol>"
+         "<small>Your printer's driver must be installed first (plug the printer into the PC by USB once, or use the maker's installer).<br>"
+         "Mac: System Settings &rarr; Printers &amp; Scanners &rarr; Add Printer &rarr; IP. Address <code>" + ip +
+         "</code>, protocol <b>HP Jetdirect &ndash; Socket</b>, then choose your printer's driver.</small></div>";
     h += "<div class=card><b>Test print</b><br><small>Label printers speak different languages. Try ZPL first; if nothing comes out or it prints gibberish, try TSPL. "
          "If neither works, that's OK: add the bridge to your computer (above) and print a test page with your printer's own driver.</small>"
          "<form method=post action=/test style=\"display:inline\"><button>Print ZPL test</button></form> "
@@ -390,6 +450,8 @@ void setup() {
   xTaskCreatePinnedToCore(usbClientTask, "usbclient", 6144, nullptr, 5, nullptr, 0);
   startWifi();
   web.on("/", handleRoot);
+  web.on("/status", handleStatus);
+  web.on("/windows.ps1", handleWinScript);
   web.on("/save", HTTP_POST, handleSave);
   web.on("/test", HTTP_POST, handleTest);
   web.on("/test-tspl", HTTP_POST, handleTestTspl);
