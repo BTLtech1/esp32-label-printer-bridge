@@ -151,7 +151,7 @@ static void openPrinter(uint8_t addr) {
   usb_host_get_device_descriptor(devHdl, &dd);
   usb_device_info_t info;
   printerModel = "";
-  if (usb_host_get_device_info(devHdl, &info) == ESP_OK) {
+  if (usb_host_device_info(devHdl, &info) == ESP_OK) {
     printerModel = usbStr(info.str_desc_product);
     if (printerModel.isEmpty()) printerModel = usbStr(info.str_desc_manufacturer);
   }
