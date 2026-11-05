@@ -1,5 +1,5 @@
 {
-  "name": "BTL Print Bridge",
+  "name": "BTL Print Bridge for your ESP32-S3",
   "version": "__VERSION__",
   "new_install_prompt_erase": true,
   "new_install_improv_wait_time": 15,
