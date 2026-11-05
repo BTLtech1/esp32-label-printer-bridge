@@ -11,6 +11,8 @@
   body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 system-ui,"Segoe UI",sans-serif;padding:32px max(16px,env(safe-area-inset-left,0px))}
   main{max-width:640px;margin:0 auto;display:grid;gap:16px}
   h1{font-size:28px;margin:0}
+  h2{font-size:18px;margin:0 0 6px}
+  .card p{margin:6px 0 0}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px}
   ol{margin:0;padding-left:20px;display:grid;gap:8px}
   .muted{color:var(--muted);font-size:14px}
@@ -24,41 +26,49 @@
 </head>
 <body>
 <main>
-  <h1>Install BTL Print Bridge</h1>
-  <p>Turns an ESP32-S3 into a Wi-Fi bridge for a USB label printer. No software to install: this page flashes the board for you.</p>
+  <h1>Set up your BTL Print Bridge</h1>
+  <p>Turn your USB label printer into a Wi-Fi printer. Takes about 3 minutes.</p>
 
   <div class="card">
-    <ol>
-      <li>Use <b>Chrome</b> or <b>Edge</b> on a computer.</li>
-      <li>Plug the board's <b>UART</b> (or "COM") USB port into your computer.</li>
-      <li>Click <b>Install</b> and pick the board's port from the list.
-        <details class="tip"><summary>Which one is the board?</summary>
-          <p>It's usually named <b>USB Single Serial</b>, <b>USB-SERIAL CH340/CH343</b>, <b>CP210x</b> or <b>USB JTAG/serial</b>, followed by a COM port. Entries with "Bluetooth" in the name, headsets, and other printers are not it.</p>
-          <p>Still not sure? Click Cancel, unplug the board, and click Install again. The entry that disappeared is your board. Plug it back in and choose it.</p>
-          <p>Picked the wrong one? Nothing gets written. The installer first checks that it's talking to an ESP32-S3 and stops with an error if it isn't.</p>
-        </details>
-      </li>
-    </ol>
+    <h2>Step 1: Plug in the board</h2>
+    <p>Use a USB-C cable to plug the board into this computer. Use the port on the board marked <b>UART</b> (or <b>COM</b>).</p>
+  </div>
+
+  <div class="card">
+    <h2>Step 2: Click Install</h2>
+    <p>A list pops up. Pick the board and click <b>Connect</b>, then follow the prompts.</p>
+    <details class="tip"><summary>Which one is the board?</summary>
+      <p>It's usually called <b>USB Single Serial</b>, <b>CH340</b>, <b>CH343</b>, <b>CP210x</b> or <b>USB JTAG/serial</b>. Ignore anything that says Bluetooth.</p>
+      <p>Still not sure? Click Cancel, unplug the board, and click Install again. The one that disappeared is your board.</p>
+      <p>Picked the wrong one? No harm done. The installer checks that it found the right kind of board before it changes anything.</p>
+    </details>
     <p style="margin-top:16px">
       <esp-web-install-button manifest="manifest.json">
         <button slot="activate">Install</button>
-        <span slot="unsupported">This browser can't flash boards. Open this page in Chrome or Edge on a computer.</span>
+        <span slot="unsupported">This page only works in <b>Chrome</b> or <b>Edge</b> on a computer.</span>
         <span slot="not-allowed">Open this page over https to install.</span>
       </esp-web-install-button>
     </p>
-    <p class="muted">If no port appears, try another USB cable (some only charge). If it can't connect, hold the board's BOOT button while you click Install.</p>
+    <p class="muted">Nothing shows up in the list? Try a different USB cable (some only charge). Stuck on connecting? Hold the board's <b>BOOT</b> button while you click Install.</p>
   </div>
 
   <div class="card">
-    <b>After installing</b>
-    <ol>
-      <li>On your phone or computer, join the Wi-Fi network <b>BTL-Printer-Setup</b>.</li>
-      <li>A setup page opens (or go to <code>http://192.168.4.1</code>). Enter your 2.4 GHz Wi-Fi and save.</li>
-      <li>Plug your printer into the board's <b>USB</b> port and open <code>http://btl-printer.local</code>.</li>
-    </ol>
+    <h2>Step 3: Type your Wi-Fi</h2>
+    <p>When it finishes, it asks for your Wi-Fi name and password. Type them in and click <b>Connect</b>. Then click <b>Visit device</b> to open the bridge's page.</p>
+    <p class="muted">Use your 2.4 GHz Wi-Fi. Most home routers have it; if you see two names, pick the one without "5G".</p>
   </div>
 
-  <p class="muted">Source, wiring and full guide: <a href="https://github.com/BTLtech1/esp32-label-printer-bridge">github.com/BTLtech1/esp32-label-printer-bridge</a></p>
+  <div class="card">
+    <h2>Step 4: Plug in your printer</h2>
+    <p>Plug your label printer into the board's other port, marked <b>USB</b>, and turn the printer on. The bridge's page will say <b>Printer: connected</b>.</p>
+    <p>To print from your computer, follow "Add it to your computer" in the <a href="https://github.com/BTLtech1/esp32-label-printer-bridge#add-it-to-your-computer">guide</a>.</p>
+  </div>
+
+  <details class="tip"><summary>Wi-Fi step didn't show up?</summary>
+    <p>Join the Wi-Fi network <b>BTL-Printer-Setup</b> from your phone or computer. A page opens (or go to <code>http://192.168.4.1</code>). Type your Wi-Fi there and save.</p>
+  </details>
+
+  <p class="muted">Source code and full guide: <a href="https://github.com/BTLtech1/esp32-label-printer-bridge">github.com/BTLtech1/esp32-label-printer-bridge</a></p>
 </main>
 </body>
 </html>

@@ -21,6 +21,29 @@
 #include <WiFiClientSecure.h>
 #include "usb/usb_host.h"
 #include "config.h"
+#include <ImprovWiFiLibrary.h>   // Wi-Fi setup over USB from the web installer (Improv protocol)
+
+#define FIRMWARE_VERSION "1.1.0"
+ImprovWiFi improv(&Serial);
+extern String cfgSsid, cfgPass;
+void saveSettings();
+void logEvent(const String &s);
+bool restartSoon = false;
+uint32_t restartAt = 0;
+
+// Called by the web installer with the Wi-Fi name and password the user typed.
+bool improvConnect(const char *ssid, const char *password) {
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.begin(ssid, password);
+  uint32_t t0 = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - t0 < 20000) delay(250);
+  if (WiFi.status() != WL_CONNECTED) return false;
+  cfgSsid = ssid; cfgPass = password;
+  saveSettings();
+  logEvent("Wi-Fi set over USB: " + cfgSsid + " " + WiFi.localIP().toString());
+  restartSoon = true; restartAt = millis() + 4000;  // restart into normal mode after the installer shows the link
+  return true;
+}
 
 // ---------------------------------------------------------------- settings
 Preferences prefs;
@@ -343,6 +366,8 @@ void startWifi() {
 // ---------------------------------------------------------------- main
 void setup() {
   Serial.begin(115200);
+  improv.setDeviceInfo(ImprovTypes::ChipFamily::CF_ESP32_S3, "BTL Print Bridge", FIRMWARE_VERSION, "BTL Print Bridge", "http://{LOCAL_IPV4}/");
+  improv.setCustomConnectWiFi(improvConnect);
   delay(300);
   xferDone = xSemaphoreCreateBinary();
   usbLock = xSemaphoreCreateMutex();
@@ -358,6 +383,8 @@ void setup() {
 }
 
 void loop() {
+  improv.handleSerial();
+  if (restartSoon && millis() > restartAt) ESP.restart();
   if (setupMode) dns.processNextRequest();
   web.handleClient();
   if (!setupMode) {
