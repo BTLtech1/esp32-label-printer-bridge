@@ -86,6 +86,7 @@ Anything that can serve those two URLs works: a Cloudflare Worker, a small serve
 | Windows can't find the printer | Make sure your computer and the bridge are on the same network. Use the IP address instead of `btl-printer.local`. |
 | Prints blank, garbage, or tiny | That's the driver, not the bridge. Use the same driver and settings that work over a USB cable. |
 | Bridge can't join Wi-Fi | It needs a 2.4 GHz network. If it fails, it goes back to setup mode (BTL-Printer-Setup). |
+| Windows test page / PDF never prints (job sits in the queue) | Usually an old printer entry that used to be on USB. Remove it and add a fresh one. In PowerShell (as Administrator), with your bridge's IP and your driver's exact name: `Add-Printer -Name "Label Wi-Fi" -DriverName "YOUR DRIVER NAME" -PortName "192.168.1.137"` (create the port first with `Add-PrinterPort -Name "192.168.1.137" -PrinterHostAddress "192.168.1.137"` if it doesn't exist). |
 | ZPL test label prints garbage or nothing | Your printer may not speak ZPL. Try the **TSPL test** button. If neither works, that's fine: network printing uses your printer's own driver, so add the bridge to your computer and print a Windows test page instead. |
 
 **5 V on the USB port.** Many dev boards don't send 5 V out of their native USB port. Printers with their own power supply usually don't need it, but a few wait for it before connecting. Some boards have a solder jumper (often marked "USB-OTG" or "IN-OUT") that lets the native port supply 5 V; check your board's documentation.
@@ -94,7 +95,7 @@ Anything that can serve those two URLs works: a Cloudflare Worker, a small serve
 
 | Printer | Language | Network printing | Notes |
 |---|---|---|---|
-| RONGTA RP421A | ZPL / TSPL | expected | raw ZPL confirmed working over USB |
+| RONGTA RP421A | ZPL | works | Windows 11, "RONGTA RP421A(ZPL 203DPI)" driver, Raw port 9100 |
 
 Tried it with another printer? Please add it to this table.
 
