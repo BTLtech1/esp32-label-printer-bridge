@@ -98,6 +98,8 @@ Anything that can serve those two URLs works: a Cloudflare Worker, a small serve
 
 **5 V on the USB port.** Many printers won't connect until they see 5 V on the USB cable, and these boards don't send 5 V out of their USB port by default. Symptom: the page says **printer not connected** and never shows a "USB:" event, even with a good cable. Changing cables or adapters (C-to-C, C-to-A) doesn't help, because none of them add power. Fix: most dual-USB-C ESP32-S3 boards have two tiny pads labeled **USB-OTG** (sometimes "IN-OUT") near the ports. Briefly touching something metal across them is a quick test: if the printer connects, bridge them permanently with a blob of solder. After that, don't plug the board's USB port into a computer or charger while it's also powered from UART/COM.
 
+No soldering? A conductive pen line across the pads also works. Or use a small **2-in-1 USB-C OTG adapter with a charging port** (charger plugged in) between the board and the printer cable. A plain OTG adapter won't help (it adds no power), and **USB hubs and docks don't work**: the bridge talks only to a printer plugged in directly.
+
 ## Tested printers
 
 | Printer | Language | Network printing | Notes |
