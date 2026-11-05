@@ -103,7 +103,7 @@ Anything that can serve those two URLs works: a Cloudflare Worker, a small serve
 | Printer | Language | Network printing | Notes |
 |---|---|---|---|
 | RONGTA RP421A | ZPL | works | Windows 11, "RONGTA RP421A(ZPL 203DPI)" driver, Raw port 9100 |
-| PM-2411-BT (PM-241 series) | TSPL | TSPL test works | Needs 5 V from the board: bridge the USB-OTG pads (see below) |
+| PM-2411-BT (PM-241 series) | TSPL | TSPL test works | Needs 5 V from the board: bridge the USB-OTG pads (see "5 V on the USB port" above) |
 
 Tried it with another printer? Please add it to this table.
 
