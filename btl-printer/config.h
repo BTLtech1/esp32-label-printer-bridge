@@ -8,3 +8,10 @@
 #define QUEUE_POLL_SECONDS 5
 #define MAX_JOB_BYTES      (2 * 1024 * 1024)    // largest queued job kept in PSRAM
 #define USB_CHUNK_BYTES    16384                // bytes per USB bulk transfer
+
+// Saved fliers: press a button and one copy prints.
+#define FLIER_COUNT        3
+// Buttons: wire each between this pin and GND (no resistor needed).
+// GPIO 4, 5, 6 = Flier 1, 2, 3. The board's BOOT button also prints Flier 1.
+#define FLIER_BUTTON_PINS  {4, 5, 6}
+#define CAPTURE_MINUTES    5                    // how long "save the next print" waits

@@ -6,7 +6,9 @@
 //    printer over USB, so it works with most USB printers (ZPL, TSPL, EPL, raster...).
 //  * Print queue (optional): polls an HTTPS URL for ready-to-print jobs (for example
 //    shipping labels in ZPL) and prints them automatically.
-//  * Setup page at http://btl-printer-XXXX.local (shown on the page and serial monitor) (or the IP shown on the serial monitor).
+//  * Saved fliers: save any print job to the board, then a physical button (or the page)
+//    prints one copy, no computer needed.
+//  * Setup page at http://btl-printer-XXXX.local or the IP shown on the serial monitor.
 //
 // Board: ESP32-S3 with native USB (e.g. ESP32-S3-DevKitC-1 N16R8).
 // Printer plugs into the board's native "USB" port; flash and power through the "UART" port.
@@ -19,11 +21,12 @@
 #include <Preferences.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
+#include <FFat.h>
 #include "usb/usb_host.h"
 #include "config.h"
 #include <ImprovWiFiLibrary.h>   // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.6.0"
+#define FIRMWARE_VERSION "1.7.0"
 ImprovWiFi improv(&Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -229,16 +232,89 @@ bool printerWrite(const uint8_t *data, size_t len) {
 WiFiServer rawServer(RAW_PRINT_PORT);
 static uint8_t netBuf[USB_CHUNK_BYTES];
 
+// ---------------------------------------------------------------- saved fliers
+// A flier is a print job saved byte-for-byte in flash (/flierN.bin). Because it's exactly what
+// the printer's own driver produced, it reprints correctly on that printer.
+bool fsReady = false;
+int captureSlot = 0;          // 1..FLIER_COUNT while "save the next print" is armed
+uint32_t captureUntil = 0;
+String flierName[FLIER_COUNT + 1];
+const uint8_t flierPins[] = FLIER_BUTTON_PINS;
+
+String flierPath(int n) { return "/flier" + String(n) + ".bin"; }
+size_t flierSize(int n) {
+  if (!fsReady || !FFat.exists(flierPath(n))) return 0;
+  File f = FFat.open(flierPath(n)); size_t z = f.size(); f.close(); return z;
+}
+String flierLabel(int n) { return flierName[n].length() ? flierName[n] : "Flier " + String(n); }
+
+// Printing runs one copy per loop pass, so the page stays responsive and a button press can stop it.
+int jobFlier = 0, jobLeft = 0, jobDone = 0;
+int flierBatch[FLIER_COUNT + 1];   // copies printed by holding the button
+
+void startFlier(int n, int copies) {
+  if (n < 1 || n > FLIER_COUNT) return;
+  if (!flierSize(n)) { logEvent(flierLabel(n) + " is empty: save a print to it first"); return; }
+  if (!printerReady) { logEvent(flierLabel(n) + " FAILED (printer not ready)"); return; }
+  jobFlier = n; jobLeft = constrain(copies, 1, 999); jobDone = 0;
+}
+
+void stopFlier() {
+  if (jobLeft) logEvent("Stopped " + flierLabel(jobFlier) + " after " + String(jobDone) + " copies");
+  jobLeft = 0;
+}
+
+void serviceFlierJob() {
+  if (!jobLeft) return;
+  File f = FFat.open(flierPath(jobFlier));
+  bool ok = (bool)f;
+  while (ok) {
+    int r = f.read(netBuf, sizeof netBuf);
+    if (r <= 0) break;
+    ok = printerWrite(netBuf, r);
+  }
+  if (f) f.close();
+  if (!ok) { logEvent(flierLabel(jobFlier) + " FAILED (printer not ready)"); jobLeft = 0; return; }
+  jobsPrinted++; jobDone++; jobLeft--;
+  if (!jobLeft) logEvent("Printed " + flierLabel(jobFlier) + (jobDone > 1 ? " x " + String(jobDone) : String("")));
+}
+
+void serviceButtons() {
+  static uint32_t downAt[FLIER_COUNT + 1] = {};
+  static bool held[FLIER_COUNT + 1] = {};
+  static uint32_t lastAction = 0;
+  for (int i = 0; i <= FLIER_COUNT; i++) {
+    // i == 0 is the board's BOOT button (GPIO 0), which also acts as button 1.
+    uint8_t pin = i == 0 ? 0 : flierPins[i - 1];
+    int n = i == 0 ? 1 : i;
+    bool down = digitalRead(pin) == LOW;
+    if (down && !downAt[i]) {                       // just pressed
+      downAt[i] = millis(); held[i] = false;
+      if (jobLeft && millis() - lastAction > 500) { stopFlier(); held[i] = true; lastAction = millis(); }  // any press stops a batch
+    } else if (down && !held[i] && millis() - downAt[i] > 2000) {   // held 2 s: batch
+      held[i] = true; lastAction = millis(); startFlier(n, flierBatch[n]);
+    } else if (!down && downAt[i]) {                // released
+      if (!held[i] && millis() - downAt[i] > 30 && millis() - lastAction > 500) { lastAction = millis(); startFlier(n, 1); }
+      downAt[i] = 0;
+    }
+  }
+}
+
 void serviceRawPrinting() {
   WiFiClient c = rawServer.accept();
   if (!c) return;
+  if (captureSlot && millis() > captureUntil) { captureSlot = 0; logEvent("Stopped waiting to save a flier"); }
+  int slot = captureSlot;
+  File out;
+  if (slot) out = FFat.open("/capture.tmp", FILE_WRITE);
   size_t total = 0; bool ok = true;
   uint32_t lastData = millis();
   while (c.connected() || c.available()) {
     int n = c.read(netBuf, sizeof netBuf);
     if (n > 0) {
       lastData = millis();
-      if (ok && !printerWrite(netBuf, n)) ok = false;
+      if (slot) { if (ok && out.write(netBuf, n) != (size_t)n) ok = false; }
+      else if (ok && !printerWrite(netBuf, n)) ok = false;
       total += n;
     } else {
       if (millis() - lastData > 15000) break;  // sender went quiet
@@ -246,6 +322,20 @@ void serviceRawPrinting() {
     }
   }
   c.stop();
+  if (slot) {
+    out.close();
+    if (!total) return;  // just a connection check, keep waiting
+    captureSlot = 0;
+    if (ok) {
+      FFat.remove(flierPath(slot));
+      FFat.rename("/capture.tmp", flierPath(slot));
+      logEvent("Saved " + flierLabel(slot) + " (" + String(total / 1024 + 1) + " KB). Press its button to print.");
+    } else {
+      FFat.remove("/capture.tmp");
+      logEvent("Couldn't save " + flierLabel(slot) + ": storage full?");
+    }
+    return;
+  }
   if (total) {
     if (ok) jobsPrinted++;
     logEvent(String(ok ? "Printed network job, " : "Network job FAILED (printer not ready), ") + total + " bytes");
@@ -312,7 +402,7 @@ String htmlEsc(const String &s) {
 const char PAGE_HEAD[] PROGMEM = R"HTML(<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>BTL Print Bridge</title><style>body{font:16px system-ui,sans-serif;max-width:560px;margin:24px auto;padding:0 16px;color:#16181d;background:#f3f2ef}
 h1{font-size:24px}.card{background:#fff;border:1px solid #ddd;border-radius:10px;padding:16px;margin:12px 0}label{display:block;margin:10px 0 4px;font-weight:600}
-input{width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box;font:inherit}button{margin-top:14px;padding:12px 18px;border:0;border-radius:8px;background:#d9471f;color:#fff;font:600 16px system-ui;cursor:pointer}
+input{width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box;font:inherit}button{margin-top:14px;padding:12px 18px;border:0;border-radius:8px;background:#d9471f;color:#fff;font:600 16px system-ui;cursor:pointer}button[disabled]{opacity:.4;cursor:default}
 .ok{color:#137333;font-weight:600}.bad{color:#b3261e;font-weight:600}small{color:#666}code{background:#eee;padding:2px 5px;border-radius:4px}</style><h1>BTL Print Bridge</h1>)HTML";
 
 // Windows setup script, served at /windows.ps1 with this bridge's IP filled in.
@@ -399,6 +489,11 @@ String statusHtml() {
   h += printerReady ? "<span class=ok>connected</span> " + htmlEsc(printerName) : String("<span class=bad>not connected</span>");
   h += "<br><b>Wi-Fi:</b> " + (setupMode ? String("setup mode") : htmlEsc(cfgSsid) + " &middot; " + WiFi.localIP().toString() + " &middot; " + hostName + ".local");
   h += "<br><b>Jobs printed:</b> " + String(jobsPrinted) + "<br><b>Last event:</b> " + htmlEsc(lastEvent);
+  if (jobLeft)
+    h += "<br><b class=ok>Printing " + htmlEsc(flierLabel(jobFlier)) + ": " + String(jobDone) + " done, " + String(jobLeft) + " to go</b> "
+         "<form method=post action=/flier style=display:inline><button name=do value=stop style=\"margin:0 0 0 8px;padding:6px 12px\">Stop</button></form>";
+  if (captureSlot && millis() < captureUntil)
+    h += "<br><b class=ok>Waiting for your next print to save as " + htmlEsc(flierLabel(captureSlot)) + "&hellip;</b>";
   return h;
 }
 
@@ -424,6 +519,27 @@ void handleRoot() {
          "If neither works, that's OK: add the bridge to your computer (above) and print a test page with your printer's own driver.</small>"
          "<form method=post action=/test style=\"display:inline\"><button>Print ZPL test</button></form> "
          "<form method=post action=/test-tspl style=\"display:inline\"><button>Print TSPL test</button></form></div>";
+    h += "<div class=card><b>Saved fliers</b><br><small>Save any print to a button: click <b>Save next print</b>, then print the flier from your computer to this printer "
+         "within " + String(CAPTURE_MINUTES) + " minutes. It's stored instead of printed. "
+         "Then <b>press</b> the button for 1 copy, <b>hold it 2 seconds</b> for the batch amount, and press any button to stop. "
+         "Buttons: GPIO 4, 5, 6 to GND (the board's BOOT button works as button 1).</small>";
+    if (!fsReady) h += "<p class=bad>Storage isn't available on this board.</p>";
+    for (int n = 1; n <= FLIER_COUNT; n++) {
+      size_t z = flierSize(n);
+      String dis = z ? "" : " disabled";
+      h += "<form method=post action=/flier style=\"margin-top:14px;border-top:1px solid #ddd;padding-top:10px\"><input type=hidden name=n value=" + String(n) + ">"
+           "<b>Button " + String(n) + ":</b> " + (z ? htmlEsc(flierLabel(n)) + " <small>(" + String(z / 1024 + 1) + " KB)</small>" : String("<small>empty</small>")) +
+           "<div style=\"display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px\">"
+           "<input name=copies type=number min=1 max=999 value=1 style=\"width:80px\"" + dis + "> "
+           "<button name=do value=print style=margin:0" + dis + ">Print</button></div>"
+           "<details style=margin-top:6px><summary style=cursor:pointer><small>Change this button</small></summary>"
+           "<label>Name</label><input name=name maxlength=30 placeholder=\"e.g. Menu\" value=\"" + htmlEsc(flierName[n]) + "\">"
+           "<label>Copies when you hold the button</label><input name=batch type=number min=1 max=999 value=" + String(flierBatch[n]) + ">"
+           "<button name=do value=rename style=\"background:#666\">Save settings</button> "
+           "<button name=do value=save style=\"background:#2563c9\">Save next print here</button> "
+           "<button name=do value=delete style=\"background:#999\"" + dis + ">Delete flier</button></details></form>";
+    }
+    h += "</div>";
   }
   h += "<div class=card><form method=post action=/save><b>Settings</b>"
        "<label>Wi-Fi name</label><input name=ssid value=\"" + htmlEsc(cfgSsid) + "\" required>"
@@ -467,6 +583,28 @@ void handleTest() {
   web.send(303);
 }
 
+void handleFlier() {
+  int n = web.arg("n").toInt();
+  String act = web.arg("do");
+  if (act == "stop") stopFlier();
+  else if (n >= 1 && n <= FLIER_COUNT) {
+    if (act == "print") startFlier(n, web.arg("copies").toInt());
+    else if (act == "save") { captureSlot = n; captureUntil = millis() + CAPTURE_MINUTES * 60000UL;
+      logEvent("Print your flier now: the next print will be saved as " + flierLabel(n)); }
+    else if (act == "delete") { FFat.remove(flierPath(n)); logEvent("Deleted " + flierLabel(n)); }
+    if (act == "rename" || act == "save") {
+      String nm = web.arg("name"); nm.trim();
+      int b = constrain((int)web.arg("batch").toInt(), 1, 999);
+      flierName[n] = nm; flierBatch[n] = b;
+      Preferences p; p.begin("btl", false);
+      p.putString(("f" + String(n)).c_str(), nm); p.putInt(("b" + String(n)).c_str(), b); p.end();
+      if (act == "rename") logEvent("Saved settings for " + flierLabel(n));
+    }
+  }
+  web.sendHeader("Location", "/");
+  web.send(303);
+}
+
 // ---------------------------------------------------------------- Wi-Fi
 void startSetupMode() {
   setupMode = true;
@@ -502,6 +640,10 @@ void setup() {
   xferDone = xSemaphoreCreateBinary();
   usbLock = xSemaphoreCreateMutex();
   loadSettings();
+  fsReady = FFat.begin(true);  // formats the storage area the first time
+  { Preferences p; p.begin("btl", true); for (int n = 1; n <= FLIER_COUNT; n++) { flierName[n] = p.getString(("f" + String(n)).c_str(), ""); flierBatch[n] = p.getInt(("b" + String(n)).c_str(), 10); } p.end(); }
+  pinMode(0, INPUT_PULLUP);
+  for (uint8_t pin : flierPins) pinMode(pin, INPUT_PULLUP);
   { uint64_t mac = ESP.getEfuseMac(); char sfx[8]; snprintf(sfx, sizeof sfx, "-%02x%02x", (uint8_t)(mac >> 32), (uint8_t)(mac >> 40)); hostName = String(BRIDGE_NAME) + sfx; }
   xTaskCreatePinnedToCore(usbHostTask, "usbhost", 4096, nullptr, 5, nullptr, 0);
   xTaskCreatePinnedToCore(usbClientTask, "usbclient", 6144, nullptr, 5, nullptr, 0);
@@ -512,6 +654,7 @@ void setup() {
   web.on("/save", HTTP_POST, handleSave);
   web.on("/test", HTTP_POST, handleTest);
   web.on("/test-tspl", HTTP_POST, handleTestTspl);
+  web.on("/flier", HTTP_POST, handleFlier);
   web.onNotFound([] { web.sendHeader("Location", "/"); web.send(302); });
   web.begin();
 }
@@ -523,6 +666,8 @@ void loop() {
   web.handleClient();
   if (!setupMode) {
     serviceRawPrinting();
+    serviceButtons();
+    serviceFlierJob();
     pollQueue();
     if (WiFi.status() != WL_CONNECTED) { static uint32_t lastTry = 0; if (millis() - lastTry > 30000) { lastTry = millis(); WiFi.reconnect(); } }
   }

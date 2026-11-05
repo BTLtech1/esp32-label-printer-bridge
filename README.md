@@ -4,6 +4,7 @@ Turn a cheap USB label printer into a **Wi-Fi printer** with a ~$10 ESP32-S3 boa
 
 - **Print from any computer over Wi-Fi.** Add the bridge as a normal network printer and keep using your printer's own driver. Every app's Print button works.
 - **Works with most cheap USB label printers.** The bridge doesn't need to understand your printer. It passes along exactly what your computer's driver sends (ZPL, TSPL, EPL, raster, whatever the printer uses).
+- **Print buttons.** Save a flier to the board and print it with a physical button: 1 copy per press, or a batch when you hold it.
 - **Optional automatic printing.** The bridge can check a web address every few seconds and print any ready-made jobs it finds, for example shipping labels for new orders.
 
 No app, no cloud account, no AI needed. Made by [BTL](https://btlstore.com).
@@ -84,6 +85,30 @@ POST {QUEUE_URL}/ack?id=<id>  Authorization: Bearer {TOKEN}   (sent after the jo
 ```
 
 Anything that can serve those two URLs works: a Cloudflare Worker, a small server, etc. Jobs must already be in your printer's language. Many shipping-label services (Shippo, EasyPost, ShipStation) can return labels as **ZPL**, which most 4×6 thermal printers understand. A job that fails to print isn't acknowledged, so it's retried.
+
+## Saved fliers and print buttons
+
+Store up to 3 print jobs on the bridge and print them with a button, no computer needed.
+
+1. On the bridge's page, under **Saved fliers**, open **Change this button** and click **Save next print here**.
+2. Within 5 minutes, print your flier from your computer to the bridge's printer as usual. The bridge saves it instead of printing it.
+3. Print it any time:
+   - **Press** the button: 1 copy.
+   - **Hold** it for 2 seconds: the batch amount you set for that button (default 10).
+   - **Press any button** during a batch to stop it.
+   - The page has the same controls, with a Copies box.
+
+A flier is saved exactly as your printer's driver made it, so reprint it on the same kind of printer.
+
+**Wiring:** each button has two wires: one to its pin, one to **GND**. No resistors needed.
+
+| Button | Pin |
+|---|---|
+| 1 | GPIO 4 (the board's **BOOT** button also works as button 1) |
+| 2 | GPIO 5 |
+| 3 | GPIO 6 |
+
+Any momentary push button works: arcade buttons, big dome buttons, tactile switches, or mechanical keyboard switches in a 3D-printed case. Female-to-female jumper wires push onto the board's pins, so no soldering is needed if your buttons have wire leads.
 
 ## Troubleshooting
 
