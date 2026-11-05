@@ -22,6 +22,9 @@
   .tip{margin-top:6px;font-size:14px;color:var(--muted)}
   .tip summary{cursor:pointer;color:var(--accent);font-weight:600;width:max-content}
   .tip p{margin:6px 0 0}
+  table{width:100%;border-collapse:collapse;margin-top:10px;font-size:15px}
+  th,td{text-align:left;padding:8px 6px;border-top:1px solid var(--line);vertical-align:top}
+  th{font-weight:600}
 </style>
 </head>
 <body>
@@ -30,8 +33,20 @@
   <p>Turn your USB label printer into a Wi-Fi printer. Takes about 3 minutes.</p>
 
   <div class="card">
+    <h2>Which port is which?</h2>
+    <p>The board has two USB-C ports, and it matters which one you use.</p>
+    <table>
+      <tr><th></th><th>UART / COM port</th><th>USB port</th></tr>
+      <tr><th>Installing (this page)</th><td>&#9989; Use this one</td><td>&#10060; Avoid</td></tr>
+      <tr><th>Everyday use</th><td>Power: phone charger or computer</td><td><b>Printer goes here</b></td></tr>
+    </table>
+    <p class="muted">Simple rule: <b>UART/COM is for power and setup, USB is for the printer.</b> Once the bridge is running, the USB port works only for the printer and won't show up on your computer, so always install and update through UART/COM.</p>
+  </div>
+
+  <div class="card">
     <h2>Step 1: Plug in the board</h2>
     <p>Use a USB-C cable to plug the board into this computer. Use the port on the board marked <b>UART</b> (or <b>COM</b>).</p>
+    <p class="muted">Board doesn't light up later on a USB-C phone charger? Many boards need a <b>USB-A to USB-C</b> cable on this port. Your computer works either way.</p>
   </div>
 
   <div class="card">
@@ -61,7 +76,10 @@
   <div class="card">
     <h2>Step 4: Plug in your printer</h2>
     <p>Plug your label printer into the board's other port, marked <b>USB</b>, and turn the printer on. The bridge's page will say <b>Printer: connected</b>.</p>
-    <p>To print from your computer, follow "Add it to your computer" in the <a href="https://github.com/BTLtech1/esp32-label-printer-bridge#add-it-to-your-computer">guide</a>.</p>
+    <p>To print from a Windows PC, use the <b>Add to a Windows PC</b> box on the bridge's page: copy one line, paste it, pick your printer. Mac and other details are in the <a href="https://github.com/BTLtech1/esp32-label-printer-bridge#add-it-to-your-computer">guide</a>.</p>
+    <details class="tip"><summary>Page says "not connected"?</summary>
+      <p>Check the printer is on and plugged into <b>USB</b>, not UART. Many printers also wait for 5&nbsp;V on the cable, which these boards don't send by default. The fix is a dab of solder (or conductive pen) across the two tiny pads marked <b>USB-OTG</b> on the board, or a small USB-C OTG adapter with a charger plugged into it. USB hubs and docks don't work. <a href="https://github.com/BTLtech1/esp32-label-printer-bridge#troubleshooting">More help</a>.</p>
+    </details>
   </div>
 
   <details class="tip"><summary>Wi-Fi step didn't show up?</summary>
