@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Install BTL Print Bridge</title>
+<script type="module" src="https://unpkg.com/esp-web-tools@10.1.1/dist/web/install-button.js?module"></script>
+<style>
+  :root{--bg:#f3f2ef;--panel:#fff;--ink:#16181d;--muted:#5f6470;--line:#dcdad4;--accent:#d9471f;color-scheme:light}
+  @media (prefers-color-scheme: dark){:root{--bg:#121318;--panel:#1b1d24;--ink:#eceef2;--muted:#9aa0ab;--line:#2c2f39;--accent:#f06a41;color-scheme:dark}}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 system-ui,"Segoe UI",sans-serif;padding:32px max(16px,env(safe-area-inset-left,0px))}
+  main{max-width:640px;margin:0 auto;display:grid;gap:16px}
+  h1{font-size:28px;margin:0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px}
+  ol{margin:0;padding-left:20px;display:grid;gap:8px}
+  .muted{color:var(--muted);font-size:14px}
+  esp-web-install-button button[slot=activate]{font:600 17px system-ui,sans-serif;padding:14px 22px;border:0;border-radius:10px;background:var(--accent);color:#fff;cursor:pointer}
+  a{color:var(--accent)}
+  code{background:var(--bg);padding:2px 6px;border-radius:5px}
+</style>
+</head>
+<body>
+<main>
+  <h1>Install BTL Print Bridge</h1>
+  <p>Turns an ESP32-S3 into a Wi-Fi bridge for a USB label printer. No software to install: this page flashes the board for you.</p>
+
+  <div class="card">
+    <ol>
+      <li>Use <b>Chrome</b> or <b>Edge</b> on a computer.</li>
+      <li>Plug the board's <b>UART</b> (or "COM") USB port into your computer.</li>
+      <li>Click <b>Install</b> and pick the board's port from the list.</li>
+    </ol>
+    <p style="margin-top:16px">
+      <esp-web-install-button manifest="manifest.json">
+        <button slot="activate">Install</button>
+        <span slot="unsupported">This browser can't flash boards. Open this page in Chrome or Edge on a computer.</span>
+        <span slot="not-allowed">Open this page over https to install.</span>
+      </esp-web-install-button>
+    </p>
+    <p class="muted">If no port appears, try another USB cable (some only charge). If it can't connect, hold the board's BOOT button while you click Install.</p>
+  </div>
+
+  <div class="card">
+    <b>After installing</b>
+    <ol>
+      <li>On your phone or computer, join the Wi-Fi network <b>BTL-Printer-Setup</b>.</li>
+      <li>A setup page opens (or go to <code>http://192.168.4.1</code>). Enter your 2.4 GHz Wi-Fi and save.</li>
+      <li>Plug your printer into the board's <b>USB</b> port and open <code>http://btl-printer.local</code>.</li>
+    </ol>
+  </div>
+
+  <p class="muted">Source, wiring and full guide: <a href="https://github.com/BTLtech1/esp32-label-printer-bridge">github.com/BTLtech1/esp32-label-printer-bridge</a></p>
+</main>
+</body>
+</html>
