@@ -43,7 +43,7 @@
 <body>
 <main>
   <h1>Set up your BTL Print Bridge</h1>
-  <p>Turn your USB label printer into a Wi-Fi printer. Takes about 3 minutes.</p>
+  <p>Turn your USB label printer into a Wi-Fi printer. Takes about 5 minutes.</p>
 
   <div class="card">
     <h2>Which port is which?</h2>
@@ -108,10 +108,22 @@
   <div class="card">
     <h2>Step 4: Plug in your printer</h2>
     <p>Plug your label printer into the board's other port, marked <b>USB</b>, and turn the printer on. The bridge's page will say <b>Printer: connected</b>.</p>
-    <p>To print from a Windows PC, use the <b>Add to a Windows PC</b> box on the bridge's page: copy one line, paste it, pick your printer. Mac and other details are in the <a href="https://github.com/BTLtech1/esp32-label-printer-bridge#add-it-to-your-computer">guide</a>.</p>
     <details class="tip"><summary>Page says "not connected"?</summary>
       <p>Check the printer is on and plugged into <b>USB</b>, not UART. Many printers also wait for 5&nbsp;V on the cable, which these boards don't send by default. The fix is a dab of solder (or conductive pen) across the two tiny pads marked <b>USB-OTG</b> on the board, or a small USB-C OTG adapter with a charger plugged into it. USB hubs and docks don't work. <a href="https://github.com/BTLtech1/esp32-label-printer-bridge#troubleshooting">More help</a>.</p>
     </details>
+  </div>
+
+  <div class="card">
+    <h2>Step 5: Connect your computer</h2>
+    <p>Open the <b>bridge's page</b>: click <b>Visit device</b> at the end of Step 3, or type the bridge's address into your browser (it's shown in the Wi-Fi step, e.g. <code>http://192.168.1.50</code>).</p>
+    <p>On that page, follow the <b>Add to a Windows PC</b> box:</p>
+    <ol>
+      <li>Right-click the <b>Start</b> button &rarr; <b>Terminal (Admin)</b> &rarr; Yes.</li>
+      <li>Click <b>Copy</b> on the bridge's page, paste into the terminal (<b>Ctrl+V</b>), press <b>Enter</b>.</li>
+      <li>Press <b>Enter</b> to use the driver it finds, pick your label size, click OK. A test page prints.</li>
+    </ol>
+    <p>Done. Press <b>Ctrl+P</b> in any app and choose <b>Label Printer (Wi-Fi)</b>.</p>
+    <p class="muted">Your printer's driver must be installed on the PC first (plug the printer in by USB once, or use the maker's installer). Mac: see the <a href="https://github.com/BTLtech1/esp32-label-printer-bridge#add-it-to-your-computer">guide</a>.</p>
   </div>
 
   <details class="tip"><summary>Wi-Fi step didn't show up?</summary>
