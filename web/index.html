@@ -22,6 +22,9 @@
   .tip{margin-top:6px;font-size:14px;color:var(--muted)}
   .tip summary{cursor:pointer;color:var(--accent);font-weight:600;width:max-content}
   .tip p{margin:6px 0 0}
+  .cmd{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
+  .cmd code{flex:1 1 260px;padding:10px;font-size:14px;word-break:break-all;border:1px solid var(--line)}
+  .cmd button{font:600 15px system-ui,sans-serif;padding:10px 16px;border:0;border-radius:8px;background:var(--accent);color:#fff;cursor:pointer}
   .ports{width:100%;height:auto;display:block;margin:12px 0 4px;font-family:system-ui,"Segoe UI",sans-serif}
   .ports .pcb{fill:var(--pcb);stroke:var(--line);stroke-width:2}
   .ports .chip{fill:var(--chip);stroke:var(--line)}
@@ -114,16 +117,16 @@
   </div>
 
   <div class="card">
-    <h2>Step 5: Connect your computer</h2>
-    <p>Open the <b>bridge's page</b>: click <b>Visit device</b> at the end of Step 3, or type the bridge's address into your browser (it's shown in the Wi-Fi step, e.g. <code>http://192.168.1.50</code>).</p>
-    <p>On that page, follow the <b>Add to a Windows PC</b> box:</p>
+    <h2>Step 5: Add it to your Windows PC</h2>
     <ol>
-      <li>Right-click the <b>Start</b> button &rarr; <b>Terminal (Admin)</b> &rarr; Yes.</li>
-      <li>Click <b>Copy</b> on the bridge's page, paste into the terminal (<b>Ctrl+V</b>), press <b>Enter</b>.</li>
-      <li>Press <b>Enter</b> to use the driver it finds, pick your label size, click OK. A test page prints.</li>
+      <li>Right-click the <b>Start</b> button &rarr; <b>Terminal (Admin)</b> &rarr; click <b>Yes</b>.</li>
+      <li>Copy this line, paste it into that window (<b>Ctrl+V</b>), and press <b>Enter</b>:
+        <div class="cmd"><code id="cmd">irm https://btltech1.github.io/esp32-label-printer-bridge/windows.txt | iex</code>
+        <button type="button" id="copy">Copy</button></div></li>
+      <li>It finds your bridge by itself. Press <b>Enter</b> to use the driver it suggests, pick your label size, click <b>OK</b>. A test page prints.</li>
     </ol>
     <p>Done. Press <b>Ctrl+P</b> in any app and choose <b>Label Printer (Wi-Fi)</b>.</p>
-    <p class="muted">Your printer's driver must be installed on the PC first (plug the printer in by USB once, or use the maker's installer). Mac: see the <a href="https://github.com/BTLtech1/esp32-label-printer-bridge#add-it-to-your-computer">guide</a>.</p>
+    <p class="muted">Your printer's driver must be installed on this PC first (plug the printer in by USB once, or use the maker's installer). Got more than one bridge? Run the line once for each. Mac: see the <a href="https://github.com/BTLtech1/esp32-label-printer-bridge#add-it-to-your-computer">guide</a>.</p>
   </div>
 
   <details class="tip"><summary>Wi-Fi step didn't show up?</summary>
@@ -132,5 +135,11 @@
 
   <p class="muted">Source code and full guide: <a href="https://github.com/BTLtech1/esp32-label-printer-bridge">github.com/BTLtech1/esp32-label-printer-bridge</a></p>
 </main>
+<script>
+  document.getElementById('copy').addEventListener('click', function () {
+    var b = this, t = document.getElementById('cmd').textContent;
+    navigator.clipboard.writeText(t).then(function () { b.textContent = 'Copied!'; setTimeout(function () { b.textContent = 'Copy'; }, 2000); });
+  });
+</script>
 </body>
 </html>

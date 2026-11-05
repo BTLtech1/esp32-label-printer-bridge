@@ -44,6 +44,7 @@ jobs:
           mkdir -p site/firmware
           cp build/btl-printer.ino.merged.bin site/firmware/btl-print-bridge.bin
           cp web/index.html site/index.html
+          cp web/windows.txt site/windows.txt
           VERSION="$(date -u +%Y.%m.%d)-${GITHUB_SHA::7}"
           sed "s/__VERSION__/${VERSION}/" web/manifest.json > site/manifest.json
           cat site/manifest.json
