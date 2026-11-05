@@ -6,8 +6,8 @@
 <title>Install BTL Print Bridge</title>
 <script type="module" src="https://unpkg.com/esp-web-tools@10.1.1/dist/web/install-button.js?module"></script>
 <style>
-  :root{--bg:#f3f2ef;--panel:#fff;--ink:#16181d;--muted:#5f6470;--line:#dcdad4;--accent:#d9471f;color-scheme:light}
-  @media (prefers-color-scheme: dark){:root{--bg:#121318;--panel:#1b1d24;--ink:#eceef2;--muted:#9aa0ab;--line:#2c2f39;--accent:#f06a41;color-scheme:dark}}
+  :root{--bg:#f3f2ef;--panel:#fff;--ink:#16181d;--muted:#5f6470;--line:#dcdad4;--accent:#d9471f;--uart:#2563c9;--pcb:#2f5d46;--chip:#30343c;color-scheme:light}
+  @media (prefers-color-scheme: dark){:root{--bg:#121318;--panel:#1b1d24;--ink:#eceef2;--muted:#9aa0ab;--line:#2c2f39;--accent:#f06a41;--uart:#6aa6ff;--pcb:#2b4d3b;--chip:#3a3f49;color-scheme:dark}}
   body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 system-ui,"Segoe UI",sans-serif;padding:32px max(16px,env(safe-area-inset-left,0px))}
   main{max-width:640px;margin:0 auto;display:grid;gap:16px}
   h1{font-size:28px;margin:0}
@@ -22,9 +22,22 @@
   .tip{margin-top:6px;font-size:14px;color:var(--muted)}
   .tip summary{cursor:pointer;color:var(--accent);font-weight:600;width:max-content}
   .tip p{margin:6px 0 0}
-  table{width:100%;border-collapse:collapse;margin-top:10px;font-size:15px}
-  th,td{text-align:left;padding:8px 6px;border-top:1px solid var(--line);vertical-align:top}
-  th{font-weight:600}
+  .ports{width:100%;height:auto;display:block;margin:12px 0 4px;font-family:system-ui,"Segoe UI",sans-serif}
+  .ports .pcb{fill:var(--pcb);stroke:var(--line);stroke-width:2}
+  .ports .chip{fill:var(--chip);stroke:var(--line)}
+  .ports .chiptxt{fill:#e9eaee;font:600 18px ui-monospace,Consolas,monospace;text-anchor:middle}
+  .ports .port{stroke:var(--ink);stroke-width:2}
+  .ports .uartfill{fill:var(--uart)} .ports .usbfill{fill:var(--accent)}
+  .ports .portlbl{font:700 20px system-ui,sans-serif;text-anchor:middle}
+  .ports .uart{fill:var(--uart)} .ports .usb{fill:var(--accent)}
+  .ports .cable{fill:none;stroke-width:7;stroke-linecap:round}
+  .ports .uartline{stroke:var(--uart)} .ports .usbline{stroke:var(--accent)}
+  .ports .dev{fill:var(--panel);stroke:var(--ink);stroke-width:3;stroke-linejoin:round}
+  .ports .screen{fill:var(--bg);stroke:var(--line)}
+  .ports .label{fill:#fff;stroke:var(--ink);stroke-width:2}
+  .ports .led{fill:#2fb35a}
+  .ports .cap{font:700 24px system-ui,sans-serif}
+  .ports .sub{fill:var(--ink);font:500 19px system-ui,sans-serif}
 </style>
 </head>
 <body>
@@ -34,13 +47,31 @@
 
   <div class="card">
     <h2>Which port is which?</h2>
-    <p>The board has two USB-C ports, and it matters which one you use.</p>
-    <table>
-      <tr><th></th><th>UART / COM port</th><th>USB port</th></tr>
-      <tr><th>Installing (this page)</th><td>&#9989; Use this one</td><td>&#10060; Avoid</td></tr>
-      <tr><th>Everyday use</th><td>Power: phone charger or computer</td><td><b>Printer goes here</b></td></tr>
-    </table>
-    <p class="muted">Simple rule: <b>UART/COM is for power and setup, USB is for the printer.</b> Once the bridge is running, the USB port works only for the printer and won't show up on your computer, so always install and update through UART/COM.</p>
+    <p>The board has two USB-C ports. It matters which one you use.</p>
+    <svg class="ports" viewBox="0 0 560 400" role="img" aria-label="The UART/COM port connects to your computer or a charger for power and installing. The USB port connects to the label printer.">
+      <rect x="180" y="10" width="200" height="150" rx="12" class="pcb"/>
+      <rect x="215" y="28" width="130" height="74" rx="6" class="chip"/>
+      <text x="280" y="72" class="chiptxt">ESP32-S3</text>
+      <text x="230" y="135" class="portlbl uart">UART</text>
+      <text x="330" y="135" class="portlbl usb">USB</text>
+      <rect x="205" y="148" width="50" height="24" rx="8" class="port uartfill"/>
+      <rect x="305" y="148" width="50" height="24" rx="8" class="port usbfill"/>
+      <path d="M230 172 C230 215 118 200 118 228" class="cable uartline"/>
+      <path d="M330 172 C330 215 450 200 450 220" class="cable usbline"/>
+      <rect x="63" y="228" width="110" height="54" rx="5" class="dev"/>
+      <rect x="72" y="236" width="92" height="38" rx="2" class="screen"/>
+      <path d="M48 286 H188 L178 296 H58 Z" class="dev"/>
+      <rect x="416" y="218" width="68" height="20" rx="2" class="label"/>
+      <rect x="390" y="234" width="120" height="62" rx="8" class="dev"/>
+      <circle cx="492" cy="252" r="4" class="led"/>
+      <text x="118" y="332" class="cap uart" text-anchor="middle">UART / COM port</text>
+      <text x="118" y="359" class="sub" text-anchor="middle">Computer or charger</text>
+      <text x="118" y="385" class="sub" text-anchor="middle">&#9989; Install &amp; update here</text>
+      <text x="450" y="332" class="cap usb" text-anchor="middle">USB port</text>
+      <text x="450" y="359" class="sub" text-anchor="middle">Label printer</text>
+      <text x="450" y="385" class="sub" text-anchor="middle">&#10060; Not for installing</text>
+    </svg>
+    <p class="muted"><b>UART/COM is for power and setup, USB is for the printer.</b> Once the bridge is running, the USB port only talks to the printer and won't show up on your computer, so always install and update through UART/COM.</p>
   </div>
 
   <div class="card">
