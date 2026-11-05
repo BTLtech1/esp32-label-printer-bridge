@@ -23,7 +23,7 @@
 #include "config.h"
 #include <ImprovWiFiLibrary.h>   // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.4.0"
+#define FIRMWARE_VERSION "1.5.0"
 ImprovWiFi improv(&Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -70,6 +70,7 @@ void saveSettings() {
 // ---------------------------------------------------------------- status
 volatile bool printerReady = false;
 String printerName = "none";
+uint16_t usbVid = 0, usbPid = 0;  // of the connected printer, used to pick the Windows driver
 uint32_t jobsPrinted = 0;
 String lastEvent = "Starting";
 String hostName;  // e.g. "btl-printer-3fa2": unique per board, so several bridges can share one network
@@ -142,6 +143,7 @@ static void openPrinter(uint8_t addr) {
   char buf[48];
   snprintf(buf, sizeof buf, "USB %04X:%04X%s", dd->idVendor, dd->idProduct, bestIsPrinter ? " (printer)" : "");
   printerName = buf;
+  usbVid = dd->idVendor; usbPid = dd->idProduct;
   printerReady = true;
   logEvent("Printer connected: " + printerName);
 }
@@ -315,7 +317,21 @@ if ($drivers.Count -eq 0) {
 Write-Host ''
 Write-Host 'Which driver is for your label printer? (label printer drivers are listed first)'
 for ($i = 0; $i -lt $drivers.Count; $i++) { Write-Host ('  [{0}] {1}' -f ($i + 1), $drivers[$i]) }
-$pick = Read-Host 'Type its number and press Enter'
+# The bridge knows the printer's USB ID; find the installed driver made for it.
+$hwid = '%HWID%'
+$best = 0
+if ($hwid) {
+  for ($i = 0; $i -lt $drivers.Count; $i++) {
+    $inf = (Get-PrinterDriver -Name $drivers[$i] -ErrorAction SilentlyContinue | Select-Object -First 1).InfPath
+    if ($inf -and (Test-Path $inf) -and (Select-String -Path $inf -Pattern $hwid -SimpleMatch -Quiet)) { $best = $i + 1; break } } }
+if ($best) {
+  Write-Host ''
+  Write-Host ("Found the driver for your printer: [{0}] {1}" -f $best, $drivers[$best - 1]) -ForegroundColor Green
+  $pick = Read-Host 'Press Enter to use it (or type a different number)'
+  if ([string]::IsNullOrWhiteSpace($pick)) { $pick = "$best" }
+} else {
+  $pick = Read-Host 'Type its number and press Enter'
+}
 $n = 0
 if (-not [int]::TryParse("$pick", [ref]$n) -or $n -lt 1 -or $n -gt $drivers.Count) { Write-Host 'That number is not in the list. Paste the line again to retry.' -ForegroundColor Yellow; return }
 $driver = $drivers[$n - 1]
@@ -350,6 +366,9 @@ void handleWinScript() {
   String sc = FPSTR(WIN_SCRIPT);
   sc.replace("%IP%", WiFi.localIP().toString());
   sc.replace("%NAME%", hostName);
+  char hw[24] = "";
+  if (printerReady && usbVid) snprintf(hw, sizeof hw, "VID_%04X&PID_%04X", usbVid, usbPid);
+  sc.replace("%HWID%", hw);
   web.send(200, "text/plain", sc);
 }
 
@@ -375,7 +394,7 @@ void handleRoot() {
          "<li>Copy this line, paste it into that window, and press Enter:<br>"
          "<input id=cmd readonly value=\"" + cmd + "\" onclick=\"this.select()\" style=\"font-family:monospace;margin-top:6px\">"
          "<button type=button onclick=\"var c=document.getElementById('cmd');c.select();document.execCommand('copy');this.textContent='Copied!'\">Copy</button></li>"
-         "<li>Type the number of your printer's driver, set your label size, done.</li></ol>"
+         "<li>Press Enter to use the driver it found (or pick yours from the list), set your label size, done.</li></ol>"
          "<small>Your printer's driver must be installed first (plug the printer into the PC by USB once, or use the maker's installer).<br>"
          "Mac: System Settings &rarr; Printers &amp; Scanners &rarr; Add Printer &rarr; IP. Address <code>" + ip +
          "</code>, protocol <b>HP Jetdirect &ndash; Socket</b>, then choose your printer's driver.</small></div>";
