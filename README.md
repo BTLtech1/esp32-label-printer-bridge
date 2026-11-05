@@ -21,7 +21,11 @@ No app, no cloud account, no AI needed. Made by [BTL](https://btlstore.com).
 
 **Wiring:** printer → adapter → the board's port labeled **USB** (sometimes "OTG"). Power the board from its other port, labeled **UART** or "COM".
 
-## Flash the firmware (one time, about 15 minutes)
+## Easiest: install from your browser
+
+Open **https://btltech1.github.io/esp32-label-printer-bridge** in Chrome or Edge, plug in the board's UART port, and click **Install**. Not sure which port is the board? Unplug it and click Install again: the entry that disappears is the board.
+
+## Flash the firmware with Arduino IDE (one time, about 15 minutes)
 
 1. Install the free **Arduino IDE** (arduino.cc/en/software).
 2. **File → Preferences → Additional boards manager URLs**, add:

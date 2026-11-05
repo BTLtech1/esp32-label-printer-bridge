@@ -17,6 +17,9 @@
   esp-web-install-button button[slot=activate]{font:600 17px system-ui,sans-serif;padding:14px 22px;border:0;border-radius:10px;background:var(--accent);color:#fff;cursor:pointer}
   a{color:var(--accent)}
   code{background:var(--bg);padding:2px 6px;border-radius:5px}
+  .tip{margin-top:6px;font-size:14px;color:var(--muted)}
+  .tip summary{cursor:pointer;color:var(--accent);font-weight:600;width:max-content}
+  .tip p{margin:6px 0 0}
 </style>
 </head>
 <body>
@@ -28,7 +31,12 @@
     <ol>
       <li>Use <b>Chrome</b> or <b>Edge</b> on a computer.</li>
       <li>Plug the board's <b>UART</b> (or "COM") USB port into your computer.</li>
-      <li>Click <b>Install</b> and pick the board's port from the list.</li>
+      <li>Click <b>Install</b> and pick the board's port from the list.
+        <details class="tip"><summary>Which one is the board?</summary>
+          <p>It's usually named <b>USB Single Serial</b>, <b>USB-SERIAL CH340/CH343</b>, <b>CP210x</b> or <b>USB JTAG/serial</b>, followed by a COM port. Entries with "Bluetooth" in the name, headsets, and other printers are not it.</p>
+          <p>Still not sure? Click Cancel, unplug the board, and click Install again. The entry that disappeared is your board. Plug it back in and choose it.</p>
+        </details>
+      </li>
     </ol>
     <p style="margin-top:16px">
       <esp-web-install-button manifest="manifest.json">
