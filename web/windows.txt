@@ -42,9 +42,11 @@ foreach ($ip in $open) {
   $printer = ''
   try {
     $st = [string](Invoke-WebRequest -UseBasicParsing -TimeoutSec 3 -Uri "http://$ip/status").Content
-    if ($st -match 'Printer:</b>\s*(.*?)<br>') { $printer = ($Matches[1] -replace '<[^>]+>', '').Trim() }
+    if ($st -match 'Printer:</b>\s*(.*?)<br>') { $printer = ($Matches[1] -replace '<[^>]+>', '' -replace '^connected\s*', '').Trim() }
   } catch {}
-  $bridges += [pscustomobject]@{ ip = $ip; name = $name; printer = $printer; script = $sc }
+  # Already set up on this PC? (a Windows printer pointed at this bridge's IP or name)
+  $added = @(Get-Printer -ErrorAction SilentlyContinue | Where-Object { $_.PortName -eq $ip -or $_.PortName -eq $name } | Select-Object -ExpandProperty Name)
+  $bridges += [pscustomobject]@{ ip = $ip; name = $name; printer = $printer; added = ($added -join "', '"); script = $sc }
 }
 
 if ($bridges.Count -eq 0) {
@@ -56,14 +58,21 @@ if ($bridges.Count -eq 0) {
 $pick = $bridges[0]
 if ($bridges.Count -gt 1) {
   Write-Host ''
-  Write-Host 'Found more than one bridge:'
+  Write-Host 'Found these bridges:'
+  $def = 0
   for ($i = 0; $i -lt $bridges.Count; $i++) {
-    Write-Host ('  [{0}] {1}  ({2})  printer: {3}' -f ($i + 1), $bridges[$i].name, $bridges[$i].ip, $bridges[$i].printer) }
+    $b = $bridges[$i]
+    $what = if ($b.printer) { $b.printer } else { 'no printer plugged in' }
+    if ($b.added) { $note = "already added as '" + $b.added + "'" } else { $note = 'NEW'; if (-not $def) { $def = $i + 1 } }
+    Write-Host ('  [{0}] {1}   {2}   ({3})' -f ($i + 1), $what, $note, $b.ip) }
   $n = 0
-  $ans = Read-Host 'Type the number of the one to add and press Enter'
+  if ($def) { $ans = Read-Host "Press Enter to add [$def], or type another number" } else { $ans = Read-Host 'All are already added. Type a number to set one up again, or just press Enter to stop' }
+  if ([string]::IsNullOrWhiteSpace($ans)) { if (-not $def) { return }; $ans = "$def" }
   if (-not [int]::TryParse("$ans", [ref]$n) -or $n -lt 1 -or $n -gt $bridges.Count) { Write-Host 'That number is not in the list. Paste the line again to retry.' -ForegroundColor Yellow; return }
   $pick = $bridges[$n - 1]
 } else {
-  Write-Host ('Found {0} ({1}), printer: {2}' -f $pick.name, $pick.ip, $pick.printer) -ForegroundColor Green
+  $what = if ($pick.printer) { $pick.printer } else { 'no printer plugged in' }
+  Write-Host ('Found your bridge ({0}), printer: {1}' -f $pick.ip, $what) -ForegroundColor Green
+  if ($pick.added) { Write-Host ("It's already added as '" + $pick.added + "'. Setting it up again (this also fixes stuck print jobs).") }
 }
 Invoke-Expression $pick.script

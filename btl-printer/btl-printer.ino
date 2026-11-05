@@ -23,7 +23,7 @@
 #include "config.h"
 #include <ImprovWiFiLibrary.h>   // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.5.0"
+#define FIRMWARE_VERSION "1.6.0"
 ImprovWiFi improv(&Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -70,6 +70,7 @@ void saveSettings() {
 // ---------------------------------------------------------------- status
 volatile bool printerReady = false;
 String printerName = "none";
+String printerModel = "";        // the printer's own name from USB, e.g. "PM-241"
 uint16_t usbVid = 0, usbPid = 0;  // of the connected printer, used to pick the Windows driver
 uint32_t jobsPrinted = 0;
 String lastEvent = "Starting";
@@ -110,7 +111,15 @@ static void closePrinter() {
     if (claimedIntf != 0xFF) usb_host_interface_release(clientHdl, devHdl, claimedIntf);
     usb_host_device_close(clientHdl, devHdl);
   }
-  devHdl = nullptr; claimedIntf = 0xFF; outEp = 0; printerName = "none";
+  devHdl = nullptr; claimedIntf = 0xFF; outEp = 0; printerName = "none"; printerModel = "";
+}
+
+// USB string descriptors are UTF-16; keep the plain ASCII characters.
+static String usbStr(const usb_str_desc_t *d) {
+  String o; if (!d) return o;
+  int n = (d->bLength - 2) / 2;
+  for (int i = 0; i < n; i++) { uint16_t c = d->wData[i]; if (c >= 32 && c < 127) o += (char)c; }
+  o.trim(); return o;
 }
 
 static void openPrinter(uint8_t addr) {
@@ -140,9 +149,16 @@ static void openPrinter(uint8_t addr) {
 
   const usb_device_desc_t *dd;
   usb_host_get_device_descriptor(devHdl, &dd);
+  usb_device_info_t info;
+  printerModel = "";
+  if (usb_host_get_device_info(devHdl, &info) == ESP_OK) {
+    printerModel = usbStr(info.str_desc_product);
+    if (printerModel.isEmpty()) printerModel = usbStr(info.str_desc_manufacturer);
+  }
+  if (printerModel.length() > 40) printerModel = printerModel.substring(0, 40);
   char buf[48];
-  snprintf(buf, sizeof buf, "USB %04X:%04X%s", dd->idVendor, dd->idProduct, bestIsPrinter ? " (printer)" : "");
-  printerName = buf;
+  snprintf(buf, sizeof buf, "USB %04X:%04X", dd->idVendor, dd->idProduct);
+  printerName = printerModel.length() ? printerModel + " (" + buf + ")" : String(buf) + (bestIsPrinter ? " (printer)" : "");
   usbVid = dd->idVendor; usbPid = dd->idProduct;
   printerReady = true;
   logEvent("Printer connected: " + printerName);
@@ -342,8 +358,11 @@ try { $t = New-Object Net.Sockets.TcpClient; if ($t.ConnectAsync($nm, 9100).Wait
 if ($addr -eq $nm) { Write-Host "Using the bridge's name ($nm), so it keeps working even if its IP address changes." }
 else { Write-Host "Couldn't reach $nm by name, using the IP address $ip. Tip: reserve this IP in your router so it never changes." -ForegroundColor Yellow }
 # One printer entry per bridge: reuse the entry that already points at this bridge, otherwise pick a free name.
-$ex = Get-Printer | Where-Object { $_.Name -like 'Label Printer*(Wi-Fi)' -and ($_.PortName -eq $ip -or $_.PortName -eq $nm) } | Select-Object -First 1
-if ($ex) { $name = $ex.Name } else { $name = 'Label Printer (Wi-Fi)'; $k = 2; while (Get-Printer -Name $name -ErrorAction SilentlyContinue) { $name = "Label Printer $k (Wi-Fi)"; $k++ } }
+# Named after the printer (e.g. "PM-241 (Wi-Fi)"), or "Label Printer (Wi-Fi)" if it has no name.
+$model = '%PRODUCT%'
+$base = 'Label Printer'; if ($model) { $base = $model }
+$ex = Get-Printer | Where-Object { $_.PortName -eq $ip -or $_.PortName -eq $nm } | Select-Object -First 1
+if ($ex) { $name = $ex.Name } else { $name = "$base (Wi-Fi)"; $k = 2; while (Get-Printer -Name $name -ErrorAction SilentlyContinue) { $name = "$base $k (Wi-Fi)"; $k++ } }
 try {
   if (-not (Get-PrinterPort -Name $addr -ErrorAction SilentlyContinue)) { Add-PrinterPort -Name $addr -PrinterHostAddress $addr -PortNumber 9100 -ErrorAction Stop }
   if ($addr -ne $ip) {
@@ -369,6 +388,9 @@ void handleWinScript() {
   char hw[24] = "";
   if (printerReady && usbVid) snprintf(hw, sizeof hw, "VID_%04X&PID_%04X", usbVid, usbPid);
   sc.replace("%HWID%", hw);
+  String model; for (char ch : printerModel) if (isalnum((unsigned char)ch) || ch == ' ' || ch == '-' || ch == '_' || ch == '.') model += ch;
+  model.trim();
+  sc.replace("%PRODUCT%", printerReady ? model : String(""));
   web.send(200, "text/plain", sc);
 }
 
