@@ -105,6 +105,10 @@ Anything that can serve those two URLs works: a Cloudflare Worker, a small serve
 
 Tried it with another printer? Please add it to this table.
 
+## Credits
+
+Made by [BTL](https://btlstore.com). I designed and tested this; the code was written with help from AI (Claude).
+
 ## License
 
 MIT. See `LICENSE`.
