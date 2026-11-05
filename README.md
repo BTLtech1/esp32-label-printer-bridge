@@ -17,7 +17,7 @@ No app, no cloud account, no AI needed. Made by [BTL](https://btlstore.com).
 |---|---|
 | **ESP32-S3** dev board with **two USB-C ports** | Search "ESP32-S3 DevKitC N16R8". Must be an **S3**: the plain ESP32, C3 and C6 can't act as a USB host. N16R8 = 16 MB flash + 8 MB PSRAM. |
 | Adapter from your printer's USB port to USB-C | Most label printers have a square USB-B port: use a "USB-B male to USB-C female" adapter plus a USB-C to USB-C cable, or the printer's normal cable plus a "USB-C male to USB-A female" OTG adapter. |
-| USB-A to USB-C cable + any USB-A phone charger | Powers the board. A USB-C charger with a C-to-C cable often won't power the UART port (see Troubleshooting). |
+| A phone charger + cable to power the board | USB-C to USB-C or USB-A to USB-C both work. A few boards won't power on from a USB-C charger with a C-to-C cable; if yours stays dark, switch to a USB-A charger (see Troubleshooting). |
 | Your label printer and its power supply | The printer must have its own power (the board doesn't power it). |
 
 **Wiring:** printer → adapter → the board's port labeled **USB** (sometimes "OTG"). Power the board from its other port, labeled **UART** or "COM".
@@ -114,7 +114,7 @@ Any momentary push button works: arcade buttons, big dome buttons, tactile switc
 
 | Problem | Fix |
 |---|---|
-| Board doesn't light up on the **UART/COM** port with a USB-C charger (but does on the other port) | Many cheap boards lack the resistors USB-C chargers look for on that port. Power it with a **USB-A to USB-C** cable from an ordinary USB-A charger or computer port instead. |
+| Board doesn't light up on the **UART/COM** port with a USB-C charger (but does on the other port) | Some boards lack the resistors USB-C chargers look for on that port. Power it with a **USB-A to USB-C** cable from an ordinary USB-A charger or computer port instead. |
 | Page says **printer not connected** | Check the printer is on and plugged into the **USB** port (not UART). If the last event never mentions "USB:", the printer is probably waiting for 5 V: see "5 V on the USB port" below. |
 | Windows can't find the printer | Make sure your computer and the bridge are on the same network. Use the IP address instead of the `.local` name. |
 | Prints blank, garbage, or tiny | That's the driver, not the bridge. Use the same driver and settings that work over a USB cable. |
