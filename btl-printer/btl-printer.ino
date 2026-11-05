@@ -23,7 +23,7 @@
 #include "config.h"
 #include <ImprovWiFiLibrary.h>   // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.1.0"
+#define FIRMWARE_VERSION "1.2.0"
 ImprovWiFi improv(&Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -305,7 +305,10 @@ void handleRoot() {
     h += "<div class=card><b>Add to a computer</b><br><small>Windows: Settings &rarr; Printers &rarr; Add device &rarr; Add manually &rarr; "
          "TCP/IP address <code>" + WiFi.localIP().toString() + "</code>, port <code>" + String(RAW_PRINT_PORT) +
          "</code>, protocol Raw. Then choose your printer's normal driver.</small></div>";
-    h += "<div class=card><form method=post action=/test><b>Test print</b><br><small>Sends a small ZPL label. Only for printers that speak ZPL.</small><br><button>Print ZPL test</button></form></div>";
+    h += "<div class=card><b>Test print</b><br><small>Label printers speak different languages. Try ZPL first; if nothing comes out or it prints gibberish, try TSPL. "
+         "If neither works, that's OK: add the bridge to your computer (above) and print a test page with your printer's own driver.</small>"
+         "<form method=post action=/test style=\"display:inline\"><button>Print ZPL test</button></form> "
+         "<form method=post action=/test-tspl style=\"display:inline\"><button>Print TSPL test</button></form></div>";
   }
   h += "<div class=card><form method=post action=/save><b>Settings</b>"
        "<label>Wi-Fi name</label><input name=ssid value=\"" + htmlEsc(cfgSsid) + "\" required>"
@@ -326,6 +329,17 @@ void handleSave() {
   web.send(200, "text/html", String(FPSTR(PAGE_HEAD)) + "<div class=card>Saved. Restarting&hellip; Reconnect to your normal Wi-Fi and open <code>http://" BRIDGE_NAME ".local</code></div>");
   delay(1500);
   ESP.restart();
+}
+
+void handleTestTspl() {
+  const char *tspl = "SIZE 100 mm,150 mm\r\nGAP 3 mm,0 mm\r\nCLS\r\nBOX 30,30,780,330,4\r\n"
+                     "TEXT 60,60,\"4\",0,1,1,\"BTL Print Bridge\"\r\nTEXT 60,140,\"3\",0,1,1,\"Wi-Fi printing works.\"\r\n"
+                     "BARCODE 60,200,\"128\",80,1,0,3,3,\"BTL-OK\"\r\nPRINT 1,1\r\n";
+  bool ok = printerWrite((const uint8_t *)tspl, strlen(tspl));
+  if (ok) jobsPrinted++;
+  logEvent(ok ? "Printed TSPL test label" : "TSPL test FAILED (printer not ready)");
+  web.sendHeader("Location", "/");
+  web.send(303);
 }
 
 void handleTest() {
@@ -378,6 +392,7 @@ void setup() {
   web.on("/", handleRoot);
   web.on("/save", HTTP_POST, handleSave);
   web.on("/test", HTTP_POST, handleTest);
+  web.on("/test-tspl", HTTP_POST, handleTestTspl);
   web.onNotFound([] { web.sendHeader("Location", "/"); web.send(302); });
   web.begin();
 }

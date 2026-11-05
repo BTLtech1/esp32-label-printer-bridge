@@ -86,7 +86,7 @@ Anything that can serve those two URLs works: a Cloudflare Worker, a small serve
 | Windows can't find the printer | Make sure your computer and the bridge are on the same network. Use the IP address instead of `btl-printer.local`. |
 | Prints blank, garbage, or tiny | That's the driver, not the bridge. Use the same driver and settings that work over a USB cable. |
 | Bridge can't join Wi-Fi | It needs a 2.4 GHz network. If it fails, it goes back to setup mode (BTL-Printer-Setup). |
-| ZPL test label prints garbage | Your printer doesn't speak ZPL. That's fine for network printing, which uses your own driver. |
+| ZPL test label prints garbage or nothing | Your printer may not speak ZPL. Try the **TSPL test** button. If neither works, that's fine: network printing uses your printer's own driver, so add the bridge to your computer and print a Windows test page instead. |
 
 **5 V on the USB port.** Many dev boards don't send 5 V out of their native USB port. Printers with their own power supply usually don't need it, but a few wait for it before connecting. Some boards have a solder jumper (often marked "USB-OTG" or "IN-OUT") that lets the native port supply 5 V; check your board's documentation.
 
