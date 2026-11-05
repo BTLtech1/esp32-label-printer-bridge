@@ -16,7 +16,7 @@ No app, no cloud account, no AI needed. Made by [BTL](https://btlstore.com).
 |---|---|
 | **ESP32-S3** dev board with **two USB-C ports** | Search "ESP32-S3 DevKitC N16R8". Must be an **S3**: the plain ESP32, C3 and C6 can't act as a USB host. N16R8 = 16 MB flash + 8 MB PSRAM. |
 | Adapter from your printer's USB port to USB-C | Most label printers have a square USB-B port: use a "USB-B male to USB-C female" adapter plus a USB-C to USB-C cable, or the printer's normal cable plus a "USB-C male to USB-A female" OTG adapter. |
-| USB-C cable + any phone charger | Powers the board. |
+| USB-A to USB-C cable + any USB-A phone charger | Powers the board. A USB-C charger with a C-to-C cable often won't power the UART port (see Troubleshooting). |
 | Your label printer and its power supply | The printer must have its own power (the board doesn't power it). |
 
 **Wiring:** printer → adapter → the board's port labeled **USB** (sometimes "OTG"). Power the board from its other port, labeled **UART** or "COM".
@@ -88,6 +88,7 @@ Anything that can serve those two URLs works: a Cloudflare Worker, a small serve
 
 | Problem | Fix |
 |---|---|
+| Board doesn't light up on the **UART/COM** port with a USB-C charger (but does on the other port) | Many cheap boards lack the resistors USB-C chargers look for on that port. Power it with a **USB-A to USB-C** cable from an ordinary USB-A charger or computer port instead. |
 | Page says **printer not connected** | Check the printer is on and plugged into the **USB** port (not UART). Try another cable or adapter. Some printers only connect when they see 5 V on the USB cable; if yours doesn't connect, see "5 V on the USB port" below. |
 | Windows can't find the printer | Make sure your computer and the bridge are on the same network. Use the IP address instead of the `.local` name. |
 | Prints blank, garbage, or tiny | That's the driver, not the bridge. Use the same driver and settings that work over a USB cable. |
