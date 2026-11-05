@@ -47,7 +47,7 @@ Open **https://btltech1.github.io/esp32-label-printer-bridge** in Chrome or Edge
 
 1. On first start the bridge creates a Wi-Fi network called **BTL-Printer-Setup**. Join it with your phone or computer. A setup page should open by itself; if not, go to `http://192.168.4.1`.
 2. Enter your Wi-Fi name and password (it must be a **2.4 GHz** network) and save. The bridge restarts and joins your Wi-Fi.
-3. Open **http://btl-printer.local** (or the IP address printed in the Serial Monitor). You'll see whether the printer is connected.
+3. Open the bridge's page: **http://btl-printer-XXXX.local**, where XXXX is unique to your board (it's shown in the Serial Monitor and on the page), or just use its IP address. You'll see whether the printer is connected.
 4. In your router settings, give the bridge a **fixed IP address** (often called "DHCP reservation") so your computer can always find it.
 
 ## Add it to your computer
@@ -59,7 +59,9 @@ Open **https://btltech1.github.io/esp32-label-printer-bridge** in Chrome or Edge
    `irm http://192.168.1.50/windows.ps1 | iex`
 4. Type the number of your printer's driver, set the paper size to your labels, and click OK. A test page prints.
 
-You can read exactly what it does first: open `http://<bridge-ip>/windows.ps1` in your browser. It adds a Raw port 9100 and a printer called "Label Printer (Wi-Fi)". It points the printer at the bridge's name (`btl-printer.local`) when your PC can find it, so printing keeps working even if your router gives the bridge a new IP address (otherwise it uses the IP, and you should reserve that IP in your router). Running it again rebuilds that printer from scratch, which also fixes stuck jobs.
+You can read exactly what it does first: open `http://<bridge-ip>/windows.ps1` in your browser. It adds a Raw port 9100 and a printer called "Label Printer (Wi-Fi)". It points the printer at the bridge's name (`btl-printer-XXXX.local`) when your PC can find it, so printing keeps working even if your router gives the bridge a new IP address (otherwise it uses the IP, and you should reserve that IP in your router). Running it again rebuilds that printer from scratch, which also fixes stuck jobs.
+
+**More than one printer?** Use one bridge per printer. Each bridge has its own name, and running each bridge's command adds a separate entry ("Label Printer (Wi-Fi)", "Label Printer 2 (Wi-Fi)", …) without touching the others.
 
 **Windows, by hand**
 Settings → Printers & scanners → Add device → Add manually → "Add a printer using an IP address or hostname" → TCP/IP Device, the bridge's IP, untick "Query the printer" → if asked, Custom → Settings → Raw, port 9100, SNMP off → pick your printer's driver. If an old USB entry for the same printer gives trouble, add a new one rather than changing its port.
@@ -87,7 +89,7 @@ Anything that can serve those two URLs works: a Cloudflare Worker, a small serve
 | Problem | Fix |
 |---|---|
 | Page says **printer not connected** | Check the printer is on and plugged into the **USB** port (not UART). Try another cable or adapter. Some printers only connect when they see 5 V on the USB cable; if yours doesn't connect, see "5 V on the USB port" below. |
-| Windows can't find the printer | Make sure your computer and the bridge are on the same network. Use the IP address instead of `btl-printer.local`. |
+| Windows can't find the printer | Make sure your computer and the bridge are on the same network. Use the IP address instead of the `.local` name. |
 | Prints blank, garbage, or tiny | That's the driver, not the bridge. Use the same driver and settings that work over a USB cable. |
 | Bridge can't join Wi-Fi | It needs a 2.4 GHz network. If it fails, it goes back to setup mode (BTL-Printer-Setup). |
 | Windows test page / PDF never prints (job sits in the queue) | Usually an old printer entry that used to be on USB. Remove it and add a fresh one. In PowerShell (as Administrator), with your bridge's IP and your driver's exact name: `Add-Printer -Name "Label Wi-Fi" -DriverName "YOUR DRIVER NAME" -PortName "192.168.1.137"` (create the port first with `Add-PrinterPort -Name "192.168.1.137" -PrinterHostAddress "192.168.1.137"` if it doesn't exist). |

@@ -6,7 +6,7 @@
 //    printer over USB, so it works with most USB printers (ZPL, TSPL, EPL, raster...).
 //  * Print queue (optional): polls an HTTPS URL for ready-to-print jobs (for example
 //    shipping labels in ZPL) and prints them automatically.
-//  * Setup page at http://btl-printer.local (or the IP shown on the serial monitor).
+//  * Setup page at http://btl-printer-XXXX.local (shown on the page and serial monitor) (or the IP shown on the serial monitor).
 //
 // Board: ESP32-S3 with native USB (e.g. ESP32-S3-DevKitC-1 N16R8).
 // Printer plugs into the board's native "USB" port; flash and power through the "UART" port.
@@ -23,7 +23,7 @@
 #include "config.h"
 #include <ImprovWiFiLibrary.h>   // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.3.1"
+#define FIRMWARE_VERSION "1.4.0"
 ImprovWiFi improv(&Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -72,6 +72,8 @@ volatile bool printerReady = false;
 String printerName = "none";
 uint32_t jobsPrinted = 0;
 String lastEvent = "Starting";
+String hostName;  // e.g. "btl-printer-3fa2": unique per board, so several bridges can share one network
+
 
 void logEvent(const String &s) {
   lastEvent = s;
@@ -299,7 +301,6 @@ input{width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;box-sizing
 // Run from an Administrator PowerShell:  irm http://<bridge-ip>/windows.ps1 | iex
 const char WIN_SCRIPT[] PROGMEM = R"PS(
 $ip = '%IP%'
-$name = 'Label Printer (Wi-Fi)'
 Write-Host ''
 Write-Host 'BTL Print Bridge: add your label printer over Wi-Fi' -ForegroundColor Cyan
 $me = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
@@ -324,6 +325,9 @@ $nm = '%NAME%.local'
 try { $t = New-Object Net.Sockets.TcpClient; if ($t.ConnectAsync($nm, 9100).Wait(4000)) { $addr = $nm }; $t.Close() } catch {}
 if ($addr -eq $nm) { Write-Host "Using the bridge's name ($nm), so it keeps working even if its IP address changes." }
 else { Write-Host "Couldn't reach $nm by name, using the IP address $ip. Tip: reserve this IP in your router so it never changes." -ForegroundColor Yellow }
+# One printer entry per bridge: reuse the entry that already points at this bridge, otherwise pick a free name.
+$ex = Get-Printer | Where-Object { $_.Name -like 'Label Printer*(Wi-Fi)' -and ($_.PortName -eq $ip -or $_.PortName -eq $nm) } | Select-Object -First 1
+if ($ex) { $name = $ex.Name } else { $name = 'Label Printer (Wi-Fi)'; $k = 2; while (Get-Printer -Name $name -ErrorAction SilentlyContinue) { $name = "Label Printer $k (Wi-Fi)"; $k++ } }
 try {
   if (-not (Get-PrinterPort -Name $addr -ErrorAction SilentlyContinue)) { Add-PrinterPort -Name $addr -PrinterHostAddress $addr -PortNumber 9100 -ErrorAction Stop }
   if ($addr -ne $ip) {
@@ -339,20 +343,20 @@ Write-Host "Added '$name'." -ForegroundColor Green
 Write-Host 'Last step: in the window that opens, set the paper size to your labels (for example 4 x 6 in / 100 x 150 mm) and click OK.'
 Start-Process rundll32.exe -ArgumentList "printui.dll,PrintUIEntry /e /n `"$name`"" -Wait
 Get-CimInstance Win32_Printer -Filter "Name='$name'" | Invoke-CimMethod -MethodName PrintTestPage | Out-Null
-Write-Host 'Sent a test page. Done! Choose "Label Printer (Wi-Fi)" when you print from any app.' -ForegroundColor Green
+Write-Host "Sent a test page. Done! Choose '$name' when you print from any app." -ForegroundColor Green
 )PS";
 
 void handleWinScript() {
   String sc = FPSTR(WIN_SCRIPT);
   sc.replace("%IP%", WiFi.localIP().toString());
-  sc.replace("%NAME%", BRIDGE_NAME);
+  sc.replace("%NAME%", hostName);
   web.send(200, "text/plain", sc);
 }
 
 String statusHtml() {
   String h = "<b>Printer:</b> ";
   h += printerReady ? "<span class=ok>connected</span> " + htmlEsc(printerName) : String("<span class=bad>not connected</span>");
-  h += "<br><b>Wi-Fi:</b> " + (setupMode ? String("setup mode") : htmlEsc(cfgSsid) + " &middot; " + WiFi.localIP().toString());
+  h += "<br><b>Wi-Fi:</b> " + (setupMode ? String("setup mode") : htmlEsc(cfgSsid) + " &middot; " + WiFi.localIP().toString() + " &middot; " + hostName + ".local");
   h += "<br><b>Jobs printed:</b> " + String(jobsPrinted) + "<br><b>Last event:</b> " + htmlEsc(lastEvent);
   return h;
 }
@@ -434,13 +438,14 @@ void startSetupMode() {
 void startWifi() {
   if (cfgSsid.isEmpty()) { startSetupMode(); return; }
   WiFi.mode(WIFI_STA);
-  WiFi.setHostname(BRIDGE_NAME);
+  WiFi.setHostname(hostName.c_str());
   WiFi.begin(cfgSsid.c_str(), cfgPass.c_str());
   uint32_t t0 = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - t0 < 20000) delay(250);
   if (WiFi.status() != WL_CONNECTED) { logEvent("Couldn't join " + cfgSsid); startSetupMode(); return; }
   WiFi.setSleep(false);  // keeps network printing responsive
-  MDNS.begin(BRIDGE_NAME);
+  MDNS.begin(hostName.c_str());
+  MDNS.setInstanceName(hostName.c_str());
   MDNS.addService("http", "tcp", 80);
   MDNS.addService("pdl-datastream", "tcp", RAW_PRINT_PORT);
   rawServer.begin();
@@ -456,6 +461,7 @@ void setup() {
   xferDone = xSemaphoreCreateBinary();
   usbLock = xSemaphoreCreateMutex();
   loadSettings();
+  { uint64_t mac = ESP.getEfuseMac(); char sfx[8]; snprintf(sfx, sizeof sfx, "-%02x%02x", (uint8_t)(mac >> 32), (uint8_t)(mac >> 40)); hostName = String(BRIDGE_NAME) + sfx; }
   xTaskCreatePinnedToCore(usbHostTask, "usbhost", 4096, nullptr, 5, nullptr, 0);
   xTaskCreatePinnedToCore(usbClientTask, "usbclient", 6144, nullptr, 5, nullptr, 0);
   startWifi();
