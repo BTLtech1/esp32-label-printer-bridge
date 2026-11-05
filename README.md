@@ -89,20 +89,21 @@ Anything that can serve those two URLs works: a Cloudflare Worker, a small serve
 | Problem | Fix |
 |---|---|
 | Board doesn't light up on the **UART/COM** port with a USB-C charger (but does on the other port) | Many cheap boards lack the resistors USB-C chargers look for on that port. Power it with a **USB-A to USB-C** cable from an ordinary USB-A charger or computer port instead. |
-| Page says **printer not connected** | Check the printer is on and plugged into the **USB** port (not UART). Try another cable or adapter. Some printers only connect when they see 5 V on the USB cable; if yours doesn't connect, see "5 V on the USB port" below. |
+| Page says **printer not connected** | Check the printer is on and plugged into the **USB** port (not UART). If the last event never mentions "USB:", the printer is probably waiting for 5 V: see "5 V on the USB port" below. |
 | Windows can't find the printer | Make sure your computer and the bridge are on the same network. Use the IP address instead of the `.local` name. |
 | Prints blank, garbage, or tiny | That's the driver, not the bridge. Use the same driver and settings that work over a USB cable. |
 | Bridge can't join Wi-Fi | It needs a 2.4 GHz network. If it fails, it goes back to setup mode (BTL-Printer-Setup). |
 | Windows test page / PDF never prints (job sits in the queue) | Usually an old printer entry that used to be on USB. Remove it and add a fresh one. In PowerShell (as Administrator), with your bridge's IP and your driver's exact name: `Add-Printer -Name "Label Wi-Fi" -DriverName "YOUR DRIVER NAME" -PortName "192.168.1.137"` (create the port first with `Add-PrinterPort -Name "192.168.1.137" -PrinterHostAddress "192.168.1.137"` if it doesn't exist). |
 | ZPL test label prints garbage or nothing | Your printer may not speak ZPL. Try the **TSPL test** button. If neither works, that's fine: network printing uses your printer's own driver, so add the bridge to your computer and print a Windows test page instead. |
 
-**5 V on the USB port.** Many dev boards don't send 5 V out of their native USB port. Printers with their own power supply usually don't need it, but a few wait for it before connecting. Some boards have a solder jumper (often marked "USB-OTG" or "IN-OUT") that lets the native port supply 5 V; check your board's documentation.
+**5 V on the USB port.** Many printers won't connect until they see 5 V on the USB cable, and these boards don't send 5 V out of their USB port by default. Symptom: the page says **printer not connected** and never shows a "USB:" event, even with a good cable. Changing cables or adapters (C-to-C, C-to-A) doesn't help, because none of them add power. Fix: most dual-USB-C ESP32-S3 boards have two tiny pads labeled **USB-OTG** (sometimes "IN-OUT") near the ports. Briefly touching something metal across them is a quick test: if the printer connects, bridge them permanently with a blob of solder. After that, don't plug the board's USB port into a computer or charger while it's also powered from UART/COM.
 
 ## Tested printers
 
 | Printer | Language | Network printing | Notes |
 |---|---|---|---|
 | RONGTA RP421A | ZPL | works | Windows 11, "RONGTA RP421A(ZPL 203DPI)" driver, Raw port 9100 |
+| PM-2411-BT (PM-241 series) | TSPL | TSPL test works | Needs 5 V from the board: bridge the USB-OTG pads (see below) |
 
 Tried it with another printer? Please add it to this table.
 
