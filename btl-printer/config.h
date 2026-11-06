@@ -10,10 +10,11 @@
 #define USB_CHUNK_BYTES    16384                // bytes per USB bulk transfer
 
 // Saved fliers: press a button and one copy prints.
-#define FLIER_COUNT        3
+#define FLIER_COUNT        5
 // Buttons: wire each between this pin and GND (no resistor needed).
-// GPIO 4, 5, 6 = Flier 1, 2, 3. The board's BOOT button also works: 1, 2 or 3 quick clicks.
-#define FLIER_BUTTON_PINS  {4, 5, 6}
+// GPIO 4, 5, 6, 7, 15 = Flier 1 to 5 (next to each other on the DevKitC-1 header).
+// The board's BOOT button also works: 1 to 5 quick clicks. One pin per flier.
+#define FLIER_BUTTON_PINS  {4, 5, 6, 7, 15}
 #define CAPTURE_MINUTES    5                    // how long "save the next print" waits
 
 // Status light: the board's built-in colour LED (GPIO 48 on most ESP32-S3 DevKit boards,

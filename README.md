@@ -7,7 +7,7 @@ Turn a cheap USB label printer into a **Wi-Fi printer** with a ~$10 ESP32-S3 boa
 - **Print text from the bridge's page.** Type a few words, see a preview sized to your label, print. No driver needed (ZPL or TSPL printers).
 - **Status light.** The board's colour LED shows green = ready, blue = printing, red = no printer, yellow = waiting to save a flier, purple = setup mode.
 - **Updates over Wi-Fi.** The bridge's page checks for new versions; click **Update now**, no cables needed.
-- **Print buttons.** Save a flier to the board and print it with a physical button: 1 copy per press, or a batch when you hold it.
+- **Print buttons.** Save up to 5 fliers to the board and print them with physical buttons: 1 copy per press, or a batch when you hold it.
 - **Optional automatic printing.** The bridge can check a web address every few seconds and print any ready-made jobs it finds, for example shipping labels for new orders.
 
 No app, no cloud account, no AI needed. Made by [BTL](https://btlstore.com).
@@ -95,7 +95,7 @@ Open the bridge's page. The **Firmware** box says whether a newer version exists
 
 ## Saved fliers and print buttons
 
-Store up to 3 print jobs on the bridge and print them with a button, no computer needed.
+Store up to 5 print jobs on the bridge and print them with a button, no computer needed.
 
 1. On the bridge's page, under **Saved fliers**, open **Change this button** and click **Save next print here**.
 2. Within 5 minutes, print your flier from your computer to the bridge's printer as usual. The bridge saves it instead of printing it.
@@ -114,8 +114,10 @@ A flier is saved exactly as your printer's driver made it, so reprint it on the 
 | 1 | GPIO 4 |
 | 2 | GPIO 5 |
 | 3 | GPIO 6 |
+| 4 | GPIO 7 |
+| 5 | GPIO 15 |
 
-**No buttons yet?** Use the board's own **BOOT** button: **1, 2 or 3 quick clicks** print Flier 1, 2 or 3. Hold on the last click (e.g. click, click, hold) for that flier's batch.
+**No buttons yet?** Use the board's own **BOOT** button: **1 to 5 quick clicks** print Flier 1 to 5. Hold on the last click (e.g. click, click, hold) for that flier's batch.
 
 Any momentary push button works: arcade buttons, big dome buttons, tactile switches, or mechanical keyboard switches in a 3D-printed case. Female-to-female jumper wires push onto the board's pins, so no soldering is needed if your buttons have wire leads.
 

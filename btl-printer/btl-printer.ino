@@ -252,12 +252,14 @@ int captureSlot = 0;          // 1..FLIER_COUNT while "save the next print" is a
 uint32_t captureUntil = 0;
 String flierName[FLIER_COUNT + 1];
 const uint8_t flierPins[] = FLIER_BUTTON_PINS;
+static_assert(sizeof(flierPins) == FLIER_COUNT, "FLIER_BUTTON_PINS needs one pin per flier (FLIER_COUNT)");
 
 String flierPath(int n) { return "/flier" + String(n) + ".bin"; }
 size_t flierSize(int n) {
   if (!fsReady || !FFat.exists(flierPath(n))) return 0;
   File f = FFat.open(flierPath(n)); size_t z = f.size(); f.close(); return z;
 }
+String flierPinList() { String s; for (int i = 0; i < FLIER_COUNT; i++) s += (i ? ", " : "") + String(flierPins[i]); return s; }
 String flierLabel(int n) { return flierName[n].length() ? flierName[n] : "Flier " + String(n); }
 
 // Printing runs one copy per loop pass, so the page stays responsive and a button press can stop it.
@@ -308,7 +310,8 @@ void serviceButtons() {
       downAt[i] = 0;
     }
   }
-  // The board's BOOT button (GPIO 0) counts clicks: 1, 2 or 3 quick clicks = Flier 1, 2 or 3.
+  // The board's BOOT button (GPIO 0) counts clicks: 1 to FLIER_COUNT quick clicks = that flier
+  // (more clicks than that count as the last flier).
   // Holding on the last click prints that flier's batch amount. Any press while printing stops.
   static uint32_t bDown = 0, bLastUp = 0;
   static int bClicks = 0;
@@ -626,7 +629,8 @@ void handleRoot() {
     h += "<div class=card><b>Saved fliers</b><br><small>Save any print to a button: click <b>Save next print</b>, then print the flier from your computer to this printer "
          "within " + String(CAPTURE_MINUTES) + " minutes. It's stored instead of printed. "
          "Then <b>press</b> the button for 1 copy, <b>hold it 2 seconds</b> for the batch amount, and press any button to stop. "
-         "Buttons: GPIO 4, 5, 6 to GND. No buttons wired? Use the board's <b>BOOT</b> button: 1, 2 or 3 quick clicks = Flier 1, 2 or 3 (hold on the last click for the batch).</small>";
+         "Buttons: GPIO " + flierPinList() + " to GND (Flier 1 to " + String(FLIER_COUNT) + "). No buttons wired? Use the board's <b>BOOT</b> button: "
+         "1 to " + String(FLIER_COUNT) + " quick clicks = Flier 1 to " + String(FLIER_COUNT) + " (hold on the last click for the batch).</small>";
     if (!fsReady) h += "<p class=bad>Storage isn't available on this board.</p>";
     for (int n = 1; n <= FLIER_COUNT; n++) {
       size_t z = flierSize(n);
