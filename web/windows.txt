@@ -52,7 +52,7 @@ foreach ($ip in $open) {
 if ($bridges.Count -eq 0) {
   Write-Host ''
   Write-Host "Couldn't find a bridge. Check that it's powered, finished setting up, and on the same Wi-Fi as this PC." -ForegroundColor Yellow
-  Write-Host "Or open the bridge's page (its address is shown after the Wi-Fi step) and use the Copy button there."
+  Write-Host "Or find the bridge in your router's list of devices, open its IP address in your browser, and use the Copy button there."
   return
 }
 $pick = $bridges[0]

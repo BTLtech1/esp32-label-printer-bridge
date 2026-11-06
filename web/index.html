@@ -105,14 +105,14 @@
 
   <div class="card">
     <h2>Step 3: Type your Wi-Fi</h2>
-    <p>When it finishes, it asks for your Wi-Fi name and password. Type them in and click <b>Connect</b>. Then click <b>Visit device</b> to open the bridge's page.</p>
+    <p>When it finishes, it asks for your Wi-Fi name and password. Type them in and click <b>Connect</b>. When it says it's connected, click <b>Continue</b>, close the box, and go on to Step 4.</p>
     <p class="muted">Use your 2.4 GHz Wi-Fi. Most home routers have it; if you see two names, pick the one without "5G".</p>
   </div>
 
   <div class="card">
     <h2>Step 4: Plug in your printer</h2>
-    <p>Plug your label printer into the board's other port, marked <b>USB</b>, and turn the printer on. The bridge's page will say <b>Printer: connected</b>.</p>
-    <details class="tip"><summary>Page says "not connected"?</summary>
+    <p>Plug your label printer into the board's other port, marked <b>USB</b>, and turn the printer on. The light on the board turns <b>green</b> when the printer is ready. (Red = no printer yet, purple = not on your Wi-Fi yet.)</p>
+    <details class="tip"><summary>Light stays red?</summary>
       <p>Check the printer is on and plugged into <b>USB</b>, not UART. Many printers also wait for 5&nbsp;V on the cable, which these boards don't send by default. The fix is a dab of solder (or conductive pen) across the two tiny pads marked <b>USB-OTG</b> on the board, or a small USB-C OTG adapter with a charger plugged into it. USB hubs and docks don't work. <a href="https://github.com/BTLtech1/esp32-label-printer-bridge#troubleshooting">More help</a>.</p>
     </details>
   </div>
@@ -128,6 +128,19 @@
     </ol>
     <p>Done. Press <b>Ctrl+P</b> in any app and choose your printer's name with <b>(Wi-Fi)</b> after it.</p>
     <p class="muted">Your printer's driver must be installed on this PC first (plug the printer in by USB once, or use the maker's installer). Got more than one bridge? Run the line once for each. Mac: see the <a href="https://github.com/BTLtech1/esp32-label-printer-bridge#add-it-to-your-computer">guide</a>.</p>
+  </div>
+
+  <div class="card">
+    <h2>Step 6 (optional): Print buttons</h2>
+    <p>Save up to 3 fliers on the bridge, then print one with the press of a button. No computer needed.</p>
+    <ol>
+      <li>Open the bridge's page: type <b>btl-printer-XXXX.local</b> into your browser (the window in Step 5 shows your bridge's name), or the board's IP address. Under <b>Saved fliers</b>, open <b>Change this button</b> and click <b>Save next print here</b>. The light turns yellow while it waits.</li>
+      <li>Within 5 minutes, print your flier from your computer as usual. The bridge saves it instead of printing it.</li>
+      <li>Print it: <b>press</b> the button for 1 copy, <b>hold it 2 seconds</b> for a batch (10 copies unless you change it), and press any button to stop.</li>
+    </ol>
+    <p class="muted"><b>No buttons wired?</b> Use the board's <b>BOOT</b> button: 1, 2 or 3 quick clicks print Flier 1, 2 or 3. Hold on the last click for the batch.</p>
+    <p class="muted"><b>Wiring buttons:</b> each button gets two wires, one to its pin (<b>GPIO 4, 5, 6</b> for Flier 1, 2, 3) and one to <b>GND</b>. No resistors needed. Female jumper wires push right onto the board's pins.</p>
+    <p class="muted">A flier is saved exactly as your printer's driver made it, so print it on the same kind of printer.</p>
   </div>
 
   <details class="tip"><summary>Wi-Fi step didn't show up?</summary>
