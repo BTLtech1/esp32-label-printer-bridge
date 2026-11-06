@@ -27,7 +27,7 @@
 #include "config.h"
 #include "improv_serial.h"       // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.8.2"
+#define FIRMWARE_VERSION "1.8.3"
 ImprovSerial improv(Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -641,24 +641,24 @@ void handleRoot() {
          "<form method=post action=/test style=\"display:inline\"><button>Print ZPL test</button></form> "
          "<form method=post action=/test-tspl style=\"display:inline\"><button>Print TSPL test</button></form></div>";
     h += FPSTR(TEXT_TOOL);
-    h += "<div class=card><b>Saved fliers</b><br><small>Save any print to a button: click <b>Save next print</b>, then print the flier from your computer to this printer "
-         "within " + String(CAPTURE_MINUTES) + " minutes. It's stored instead of printed. "
-         "Then <b>press</b> the button for 1 copy, <b>hold it 2 seconds</b> for the batch amount, and press any button to stop. "
-         "Buttons: GPIO " + flierPinList() + " to GND (Flier 1 to " + String(FLIER_COUNT) + "). No buttons wired? Use the board's <b>BOOT</b> button: "
-         "1 to " + String(FLIER_COUNT) + " quick clicks = Flier 1 to " + String(FLIER_COUNT) + " (hold on the last click for the batch).</small>";
+    h += "<div class=card><b>Saved fliers</b><br><small>To save one: open <b>Change this flier</b>, click <b>Save next print here</b>, then print the flier from your computer to this printer "
+         "within " + String(CAPTURE_MINUTES) + " minutes. It's stored instead of printed.<br>"
+         "To print it: click the board's <b>BOOT</b> button 1 to " + String(FLIER_COUNT) + " times quickly for Flier 1 to " + String(FLIER_COUNT) + ". "
+         "Hold the last click for 2 seconds to print the batch, and press again to stop.<br>"
+         "Optional extra buttons: GPIO " + flierPinList() + " to GND for Flier 1 to " + String(FLIER_COUNT) + " (press = 1 copy, hold = batch).</small>";
     if (!fsReady) h += "<p class=bad>Storage isn't available on this board.</p>";
     for (int n = 1; n <= FLIER_COUNT; n++) {
       size_t z = flierSize(n);
       String dis = z ? "" : " disabled";
       h += "<form method=post action=/flier style=\"margin-top:14px;border-top:1px solid #ddd;padding-top:10px\"><input type=hidden name=n value=" + String(n) + ">"
-           "<b>Button " + String(n) + ":</b> " + (z ? htmlEsc(flierLabel(n)) + " <small>(" + String(z / 1024 + 1) + " KB)</small>" : String("<small>empty</small>")) +
+           "<b>Flier " + String(n) + "</b> <small>(" + String(n) + (n == 1 ? " click" : " clicks") + ")</small>: " + (z ? htmlEsc(flierLabel(n)) + " <small>(" + String(z / 1024 + 1) + " KB)</small>" : String("<small>empty</small>")) +
            "<div style=\"display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px\">"
            "<input name=copies type=number min=1 max=999 value=1 style=\"width:80px\"" + dis + " aria-label=\"Copies to print now\"> "
            "<button name=do value=print style=margin:0" + dis + ">Print</button></div>"
-           "<div style=\"display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px\"><small>Hold the button to print</small>"
+           "<div style=\"display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px\"><small>Batch (hold the last click):</small>"
            "<input name=batch type=number min=1 max=999 value=" + String(flierBatch[n]) + " style=\"width:80px\" aria-label=\"Copies when you hold the button\">"
            "<small>copies</small><button name=do value=rename style=\"margin:0;background:#666\">Save</button></div>"
-           "<details style=margin-top:6px><summary style=cursor:pointer><small>Change this button</small></summary>"
+           "<details style=margin-top:6px><summary style=cursor:pointer><small>Change this flier</small></summary>"
            "<label>Name</label><input name=name maxlength=30 placeholder=\"e.g. Menu\" value=\"" + htmlEsc(flierName[n]) + "\">"
            "<button name=do value=rename style=\"background:#666\">Save name</button> "
            "<button name=do value=save style=\"background:#2563c9\">Save next print here</button> "
