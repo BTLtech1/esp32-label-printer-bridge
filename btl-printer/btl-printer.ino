@@ -27,7 +27,7 @@
 #include "config.h"
 #include "improv_serial.h"       // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.8.1"
+#define FIRMWARE_VERSION "1.8.2"
 ImprovSerial improv(Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -653,12 +653,14 @@ void handleRoot() {
       h += "<form method=post action=/flier style=\"margin-top:14px;border-top:1px solid #ddd;padding-top:10px\"><input type=hidden name=n value=" + String(n) + ">"
            "<b>Button " + String(n) + ":</b> " + (z ? htmlEsc(flierLabel(n)) + " <small>(" + String(z / 1024 + 1) + " KB)</small>" : String("<small>empty</small>")) +
            "<div style=\"display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px\">"
-           "<input name=copies type=number min=1 max=999 value=1 style=\"width:80px\"" + dis + "> "
+           "<input name=copies type=number min=1 max=999 value=1 style=\"width:80px\"" + dis + " aria-label=\"Copies to print now\"> "
            "<button name=do value=print style=margin:0" + dis + ">Print</button></div>"
+           "<div style=\"display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px\"><small>Hold the button to print</small>"
+           "<input name=batch type=number min=1 max=999 value=" + String(flierBatch[n]) + " style=\"width:80px\" aria-label=\"Copies when you hold the button\">"
+           "<small>copies</small><button name=do value=rename style=\"margin:0;background:#666\">Save</button></div>"
            "<details style=margin-top:6px><summary style=cursor:pointer><small>Change this button</small></summary>"
            "<label>Name</label><input name=name maxlength=30 placeholder=\"e.g. Menu\" value=\"" + htmlEsc(flierName[n]) + "\">"
-           "<label>Copies when you hold the button</label><input name=batch type=number min=1 max=999 value=" + String(flierBatch[n]) + ">"
-           "<button name=do value=rename style=\"background:#666\">Save settings</button> "
+           "<button name=do value=rename style=\"background:#666\">Save name</button> "
            "<button name=do value=save style=\"background:#2563c9\">Save next print here</button> "
            "<button name=do value=delete style=\"background:#999\"" + dis + ">Delete flier</button></details></form>";
     }

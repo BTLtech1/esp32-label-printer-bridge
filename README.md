@@ -101,7 +101,7 @@ Store up to 5 print jobs on the bridge and print them with a button, no computer
 2. Within 5 minutes, print your flier from your computer to the bridge's printer as usual. The bridge saves it instead of printing it.
 3. Print it any time:
    - **Press** the button: 1 copy.
-   - **Hold** it for 2 seconds: the batch amount you set for that button (default 10).
+   - **Hold** it for 2 seconds: the batch amount for that button (default 10; change it next to each flier on the bridge's page, under **Hold the button to print __ copies**).
    - **Press any button** during a batch to stop it.
    - The page has the same controls, with a Copies box.
 
