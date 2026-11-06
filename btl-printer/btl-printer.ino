@@ -22,11 +22,12 @@
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 #include <FFat.h>
+#include <Update.h>
 #include "usb/usb_host.h"
 #include "config.h"
 #include <ImprovWiFiLibrary.h>   // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.7.2"
+#define FIRMWARE_VERSION "1.8.0"
 ImprovWiFi improv(&Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -206,8 +207,19 @@ static void usbClientTask(void *) {
 }
 
 // Send bytes to the printer, chunked. Returns false if the printer isn't there or a transfer fails.
+// ---------------------------------------------------------------- status light
+const uint8_t ledPins[] = LED_PINS;
+void ledSet(uint8_t r, uint8_t g, uint8_t b) {
+  static uint32_t cur = 0xFFFFFFFF;
+  uint32_t want = (r << 16) | (g << 8) | b;
+  if (want == cur) return;
+  cur = want;
+  for (uint8_t pin : ledPins) rgbLedWrite(pin, r, g, b);
+}
+
 bool printerWrite(const uint8_t *data, size_t len) {
   if (!printerReady) return false;
+  ledSet(0, 0, LED_BRIGHTNESS);  // blue while printing
   xSemaphoreTake(usbLock, portMAX_DELAY);
   bool ok = true;
   while (len && ok && printerReady) {
@@ -317,6 +329,16 @@ void serviceButtons() {
   }
 }
 
+extern bool setupMode;
+void updateLed() {
+  const uint8_t L = LED_BRIGHTNESS;
+  if (setupMode) ledSet(L / 2, 0, L);                              // purple: setup mode
+  else if (!printerReady) ledSet(L, 0, 0);                         // red: no printer
+  else if (jobLeft) ledSet(0, 0, L);                               // blue: printing
+  else if (captureSlot && millis() < captureUntil) ledSet(L, L * 2 / 3, 0);  // yellow: waiting to save a flier
+  else ledSet(0, L * 2 / 3, 0);                                    // green: ready
+}
+
 void serviceRawPrinting() {
   WiFiClient c = rawServer.accept();
   if (!c) return;
@@ -421,6 +443,61 @@ const char PAGE_HEAD[] PROGMEM = R"HTML(<!doctype html><meta charset="utf-8"><me
 h1{font-size:24px}.card{background:#fff;border:1px solid #ddd;border-radius:10px;padding:16px;margin:12px 0}label{display:block;margin:10px 0 4px;font-weight:600}
 input{width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box;font:inherit}button{margin-top:14px;padding:12px 18px;border:0;border-radius:8px;background:#d9471f;color:#fff;font:600 16px system-ui;cursor:pointer}button[disabled]{opacity:.4;cursor:default}
 .ok{color:#137333;font-weight:600}.bad{color:#b3261e;font-weight:600}small{color:#666}code{background:#eee;padding:2px 5px;border-radius:4px}</style><h1>BTL Print Bridge</h1>)HTML";
+
+// "Print text" card: the browser draws the text, turns it into a black-and-white image and
+// sends it in the printer's language (ZPL or TSPL) to /raw, which streams it to the printer.
+const char TEXT_TOOL[] PROGMEM = R"HTML(<div class=card><b>Print text</b><br><small>Type a few words; they're sized to fill the label.</small>
+<textarea id=tt rows=3 style="width:100%;box-sizing:border-box;margin-top:8px;padding:10px;font:inherit;border:1px solid #ccc;border-radius:8px">FRAGILE</textarea>
+<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px">
+<span>Label</span><input id=tw type=number step=0.1 min=0.5 value=4 style=width:70px><span>&times;</span><input id=th type=number step=0.1 min=0.5 value=6 style=width:70px><span>in</span>
+<select id=to style="padding:9px;border-radius:8px"><option value=1>Sideways</option><option value=0>Upright</option></select>
+<label style="display:inline;margin:0;font-weight:400"><input id=tb type=checkbox checked style=width:auto> Bold</label>
+<select id=tl style="padding:9px;border-radius:8px" title="Printer language"><option>ZPL</option><option>TSPL</option></select></div>
+<canvas id=tc style="width:100%;margin-top:10px;border:1px solid #ccc;border-radius:6px;background:#fff;image-rendering:pixelated"></canvas>
+<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span>Copies</span><input id=tn type=number min=1 max=999 value=1 style=width:80px>
+<button id=tp type=button style="margin:0">Print text</button><small id=tm></small></div>
+<small>Prints blank or garbled? Switch ZPL/TSPL (use whichever test label worked).</small></div>
+<script>(function(){
+var $=function(i){return document.getElementById(i)},K=['tw','th','to','tl','tb','tt'];
+function st(k,v){try{if(v===undefined)return localStorage.getItem('btl_'+k);localStorage.setItem('btl_'+k,v)}catch(e){return null}}
+K.forEach(function(k){var v=st(k);if(v!==null){if(k=='tb')$(k).checked=v=='1';else $(k).value=v}});
+function draw(){var dpi=203,land=$('to').value=='1',W=Math.ceil(Math.round((parseFloat($('tw').value)||4)*dpi)/8)*8,H=Math.round((parseFloat($('th').value)||6)*dpi);
+var c=$('tc');c.width=W;c.height=H;var x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,W,H);x.fillStyle='#000';
+var L=$('tt').value.split('\n'),aw=land?H:W,ah=land?W:H,m=Math.round(dpi*0.12),wt=$('tb').checked?'700 ':'400 ';
+x.font=wt+'100px Arial,Helvetica,sans-serif';var wd=1;L.forEach(function(l){wd=Math.max(wd,x.measureText(l).width)});
+var s=Math.max(8,Math.floor(Math.min((ah-2*m)/(L.length*1.15),(aw-2*m)*100/wd)));
+x.save();if(land){x.translate(W,0);x.rotate(Math.PI/2)}x.font=wt+s+'px Arial,Helvetica,sans-serif';x.textAlign='center';x.textBaseline='middle';
+var lh=s*1.15,top=ah/2-lh*(L.length-1)/2;L.forEach(function(l,i){x.fillText(l,aw/2,top+i*lh)});x.restore();return{x:x,W:W,H:H}}
+function save(){K.forEach(function(k){st(k,k=='tb'?($(k).checked?'1':'0'):$(k).value)});draw()}
+K.forEach(function(k){$(k).addEventListener('input',save)});$('tb').addEventListener('change',save);draw();
+$('tp').onclick=function(){var r=draw(),W=r.W,H=r.H,bpr=W/8,d=r.x.getImageData(0,0,W,H).data,b=new Uint8Array(bpr*H),n=Math.max(1,parseInt($('tn').value)||1),job;
+for(var y=0;y<H;y++)for(var i=0;i<W;i++)if(d[(y*W+i)*4]<128)b[y*bpr+(i>>3)]|=0x80>>(i&7);
+if($('tl').value=='ZPL'){var h='';for(var j=0;j<b.length;j++)h+=(b[j]<16?'0':'')+b[j].toString(16);
+job=['^XA^PW'+W+'^LL'+H+'^FO0,0^GFA,'+b.length+','+b.length+','+bpr+','+h.toUpperCase()+'^FS^PQ'+n+'^XZ']}
+else{for(var j=0;j<b.length;j++)b[j]^=0xFF;var mm=function(v){return(v*25.4).toFixed(1)};
+job=['SIZE '+mm(parseFloat($('tw').value)||4)+' mm,'+mm(parseFloat($('th').value)||6)+' mm\r\nGAP 3 mm,0 mm\r\nCLS\r\nBITMAP 0,0,'+bpr+','+H+',0,',b,'\r\nPRINT 1,'+n+'\r\n']}
+var f=new FormData();f.append('f',new Blob(job),'label.prn');$('tm').textContent='Sending...';
+fetch('/raw',{method:'POST',body:f}).then(function(r){return r.text()}).then(function(t){$('tm').textContent=t}).catch(function(){$('tm').textContent='Could not reach the bridge.'})};
+})();</script>)HTML";
+
+// "Firmware" card: the browser checks GitHub for a newer version, downloads it over HTTPS and
+// uploads it to /update. A .bin file can also be uploaded by hand.
+const char FW_TOOL[] PROGMEM = R"HTML(<div class=card><b>Firmware</b> <small>version %VER%</small><br><span id=uv><small>Checking for updates&hellip;</small></span>
+<details style=margin-top:8px><summary style=cursor:pointer><small>Update from a file</small></summary><input id=uf type=file accept=.bin style=margin-top:8px><button id=ub type=button>Install file</button></details></div>
+<script>(function(){
+var $=function(i){return document.getElementById(i)},CUR='%VER%',BASE='https://btltech1.github.io/esp32-label-printer-bridge/';
+function newer(a,b){a=a.split('.').map(Number);b=b.split('.').map(Number);for(var i=0;i<3;i++){if((a[i]||0)!=(b[i]||0))return(a[i]||0)>(b[i]||0)}return false}
+function send(blob,msg){msg.textContent='Installing... (about 30 seconds, keep this page open)';var f=new FormData();f.append('f',blob,'update.bin');
+fetch('/update',{method:'POST',body:f}).then(function(r){return r.text().then(function(t){if(!r.ok)throw t;msg.textContent='Updated! Restarting... this page reloads in 20 seconds.';setTimeout(function(){location.reload()},20000)})})
+.catch(function(e){msg.textContent='Update failed: '+e})}
+fetch(BASE+'version.json',{cache:'no-store'}).then(function(r){return r.json()}).then(function(j){
+if(!newer(j.version,CUR)){$('uv').innerHTML='<small class=ok>Up to date.</small>';return}
+$('uv').innerHTML='<b>Version '+j.version+' is available.</b> <button id=ug type=button>Update now</button> <small id=um></small>';
+$('ug').onclick=function(){var m=$('um');this.disabled=true;m.textContent='Downloading...';
+fetch(BASE+'firmware/btl-print-bridge-update.bin',{cache:'no-store'}).then(function(r){if(!r.ok)throw 'download failed';return r.blob()}).then(function(b){send(b,m)}).catch(function(e){m.textContent='Update failed: '+e})}
+}).catch(function(){$('uv').innerHTML="<small>Couldn't check for updates (no internet?).</small>"});
+$('ub').onclick=function(){var f=$('uf').files[0];if(f)send(f,$('uv'))};
+})();</script>)HTML";
 
 // Windows setup script, served at /windows.ps1 with this bridge's IP filled in.
 // Run from an Administrator PowerShell:  irm http://<bridge-ip>/windows.ps1 | iex
@@ -545,6 +622,7 @@ void handleRoot() {
          "If neither works, that's OK: add the bridge to your computer (above) and print a test page with your printer's own driver.</small>"
          "<form method=post action=/test style=\"display:inline\"><button>Print ZPL test</button></form> "
          "<form method=post action=/test-tspl style=\"display:inline\"><button>Print TSPL test</button></form></div>";
+    h += FPSTR(TEXT_TOOL);
     h += "<div class=card><b>Saved fliers</b><br><small>Save any print to a button: click <b>Save next print</b>, then print the flier from your computer to this printer "
          "within " + String(CAPTURE_MINUTES) + " minutes. It's stored instead of printed. "
          "Then <b>press</b> the button for 1 copy, <b>hold it 2 seconds</b> for the batch amount, and press any button to stop. "
@@ -567,6 +645,7 @@ void handleRoot() {
     }
     h += "</div>";
   }
+  if (!setupMode) { String fw = FPSTR(FW_TOOL); fw.replace("%VER%", FIRMWARE_VERSION); h += fw; }
   h += "<div class=card><form method=post action=/save><b>Settings</b>"
        "<label>Wi-Fi name</label><input name=ssid value=\"" + htmlEsc(cfgSsid) + "\" required>"
        "<label>Wi-Fi password</label><input name=pass type=password placeholder=\"(unchanged)\">"
@@ -631,6 +710,49 @@ void handleFlier() {
   web.send(303);
 }
 
+// /raw: a print job uploaded from the page, streamed straight to the printer.
+bool rawOk = false; size_t rawBytes = 0;
+void handleRawUpload() {
+  HTTPUpload &u = web.upload();
+  if (u.status == UPLOAD_FILE_START) { rawOk = printerReady; rawBytes = 0; }
+  else if (u.status == UPLOAD_FILE_WRITE) { if (rawOk && !printerWrite(u.buf, u.currentSize)) rawOk = false; rawBytes += u.currentSize; }
+}
+void handleRawDone() {
+  if (rawOk && rawBytes) { jobsPrinted++; logEvent("Printed a label from the page"); web.send(200, "text/plain", "Sent to the printer."); }
+  else { logEvent("Label from the page FAILED (printer not ready)"); web.send(200, "text/plain", "Printer not ready."); }
+}
+
+// /update: new firmware uploaded from the page (Wi-Fi update).
+String updErr; size_t updSeen = 0;
+void handleUpdateUpload() {
+  HTTPUpload &u = web.upload();
+  if (u.status == UPLOAD_FILE_START) {
+    updErr = ""; updSeen = 0;
+    logEvent("Installing a firmware update...");
+    if (!Update.begin(UPDATE_SIZE_UNKNOWN)) updErr = Update.errorString();
+  } else if (u.status == UPLOAD_FILE_WRITE) {
+    if (updErr.length()) return;
+    if (updSeen == 0) {
+      // An app image starts with 0xE9 and has the app-description magic 0xABCD5432 at byte 32.
+      // This rejects the install-page file (which starts with the bootloader) and random files.
+      bool okImg = u.currentSize >= 36 && u.buf[0] == 0xE9 && u.buf[32] == 0x32 && u.buf[33] == 0x54 && u.buf[34] == 0xCD && u.buf[35] == 0xAB;
+      if (!okImg) { updErr = "that isn't a BTL Print Bridge update file (use btl-print-bridge-update.bin)"; Update.abort(); return; }
+    }
+    if (Update.write(u.buf, u.currentSize) != u.currentSize) updErr = Update.errorString();
+    updSeen += u.currentSize;
+  } else if (u.status == UPLOAD_FILE_END) {
+    if (!updErr.length() && !Update.end(true)) updErr = Update.errorString();
+  } else if (u.status == UPLOAD_FILE_ABORTED) {
+    Update.abort(); updErr = "upload interrupted";
+  }
+}
+void handleUpdateDone() {
+  if (updErr.length()) { logEvent("Update failed: " + updErr); web.send(500, "text/plain", updErr); return; }
+  logEvent("Update installed, restarting");
+  web.send(200, "text/plain", "ok");
+  restartSoon = true; restartAt = millis() + 1500;
+}
+
 // ---------------------------------------------------------------- Wi-Fi
 void startSetupMode() {
   setupMode = true;
@@ -681,6 +803,8 @@ void setup() {
   web.on("/test", HTTP_POST, handleTest);
   web.on("/test-tspl", HTTP_POST, handleTestTspl);
   web.on("/flier", HTTP_POST, handleFlier);
+  web.on("/raw", HTTP_POST, handleRawDone, handleRawUpload);
+  web.on("/update", HTTP_POST, handleUpdateDone, handleUpdateUpload);
   web.onNotFound([] { web.sendHeader("Location", "/"); web.send(302); });
   web.begin();
 }
@@ -690,6 +814,7 @@ void loop() {
   if (restartSoon && millis() > restartAt) ESP.restart();
   if (setupMode) dns.processNextRequest();
   web.handleClient();
+  updateLed();
   if (!setupMode) {
     serviceRawPrinting();
     serviceButtons();

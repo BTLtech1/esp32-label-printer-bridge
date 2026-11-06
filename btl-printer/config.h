@@ -15,3 +15,9 @@
 // GPIO 4, 5, 6 = Flier 1, 2, 3. The board's BOOT button also works: 1, 2 or 3 quick clicks.
 #define FLIER_BUTTON_PINS  {4, 5, 6}
 #define CAPTURE_MINUTES    5                    // how long "save the next print" waits
+
+// Status light: the board's built-in colour LED (GPIO 48 on most ESP32-S3 DevKit boards,
+// GPIO 38 on some newer ones; both are driven). Green = ready, blue = printing,
+// red = no printer, yellow = waiting to save a flier, purple = setup mode.
+#define LED_PINS           {48, 38}
+#define LED_BRIGHTNESS     20                   // 0-255

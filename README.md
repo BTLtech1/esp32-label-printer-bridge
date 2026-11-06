@@ -4,6 +4,9 @@ Turn a cheap USB label printer into a **Wi-Fi printer** with a ~$10 ESP32-S3 boa
 
 - **Print from any computer over Wi-Fi.** Add the bridge as a normal network printer and keep using your printer's own driver. Every app's Print button works.
 - **Works with most cheap USB label printers.** The bridge doesn't need to understand your printer. It passes along exactly what your computer's driver sends (ZPL, TSPL, EPL, raster, whatever the printer uses).
+- **Print text from the bridge's page.** Type a few words, see a preview sized to your label, print. No driver needed (ZPL or TSPL printers).
+- **Status light.** The board's colour LED shows green = ready, blue = printing, red = no printer, yellow = waiting to save a flier, purple = setup mode.
+- **Updates over Wi-Fi.** The bridge's page checks for new versions; click **Update now**, no cables needed.
 - **Print buttons.** Save a flier to the board and print it with a physical button: 1 copy per press, or a batch when you hold it.
 - **Optional automatic printing.** The bridge can check a web address every few seconds and print any ready-made jobs it finds, for example shipping labels for new orders.
 
@@ -85,6 +88,10 @@ POST {QUEUE_URL}/ack?id=<id>  Authorization: Bearer {TOKEN}   (sent after the jo
 ```
 
 Anything that can serve those two URLs works: a Cloudflare Worker, a small server, etc. Jobs must already be in your printer's language. Many shipping-label services (Shippo, EasyPost, ShipStation) can return labels as **ZPL**, which most 4×6 thermal printers understand. A job that fails to print isn't acknowledged, so it's retried.
+
+## Updating
+
+Open the bridge's page. The **Firmware** box says whether a newer version exists; click **Update now** and wait about 30 seconds. Your settings and saved fliers are kept. (You can also install `btl-print-bridge-update.bin` by hand under **Update from a file**, or re-run the browser installer over USB.)
 
 ## Saved fliers and print buttons
 

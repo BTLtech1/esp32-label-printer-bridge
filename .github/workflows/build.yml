@@ -43,8 +43,12 @@ jobs:
         run: |
           mkdir -p site/firmware
           cp build/btl-printer.ino.merged.bin site/firmware/btl-print-bridge.bin
+          cp build/btl-printer.ino.bin site/firmware/btl-print-bridge-update.bin
           cp web/index.html site/index.html
           cp web/windows.txt site/windows.txt
+          FW=$(grep -oP 'FIRMWARE_VERSION "\K[^"]+' btl-printer/btl-printer.ino)
+          echo "{\"version\":\"$FW\"}" > site/version.json
+          cat site/version.json
           VERSION="$(date -u +%Y.%m.%d)-${GITHUB_SHA::7}"
           sed "s/__VERSION__/${VERSION}/" web/manifest.json > site/manifest.json
           cat site/manifest.json
