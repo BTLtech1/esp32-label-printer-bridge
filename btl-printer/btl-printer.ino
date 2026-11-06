@@ -26,7 +26,7 @@
 #include "config.h"
 #include <ImprovWiFiLibrary.h>   // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.7.0"
+#define FIRMWARE_VERSION "1.7.1"
 ImprovWiFi improv(&Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -452,15 +452,24 @@ else { Write-Host "Couldn't reach $nm by name, using the IP address $ip. Tip: re
 $model = '%PRODUCT%'
 $base = 'Label Printer'; if ($model) { $base = $model }
 $ex = Get-Printer | Where-Object { $_.PortName -eq $ip -or $_.PortName -eq $nm } | Select-Object -First 1
-if ($ex) { $name = $ex.Name } else { $name = "$base (Wi-Fi)"; $k = 2; while (Get-Printer -Name $name -ErrorAction SilentlyContinue) { $name = "$base $k (Wi-Fi)"; $k++ } }
+$old = $null; if ($ex) { $old = $ex.Name }
+# Suggest a name: keep a name you chose before, but replace an old generic "Label Printer (Wi-Fi)" with the printer's own name.
+if ($old -and -not ($old -like 'Label Printer*(Wi-Fi)' -and $model)) { $suggest = $old }
+else { $suggest = "$base (Wi-Fi)"; $k = 2; while ($suggest -ne $old -and (Get-Printer -Name $suggest -ErrorAction SilentlyContinue)) { $suggest = "$base $k (Wi-Fi)"; $k++ } }
+Write-Host ''
+$typed = Read-Host "Name for this printer in Windows (press Enter for '$suggest', or type your own)"
+$name = $suggest
+if (-not [string]::IsNullOrWhiteSpace($typed)) { $name = ($typed.Trim() -replace '[\\,!]', '') }
+if ($name -ne $old -and (Get-Printer -Name $name -ErrorAction SilentlyContinue)) {
+  Write-Host "There's already a printer called '$name'. Paste the line again and pick another name." -ForegroundColor Yellow; return }
 try {
   if (-not (Get-PrinterPort -Name $addr -ErrorAction SilentlyContinue)) { Add-PrinterPort -Name $addr -PrinterHostAddress $addr -PortNumber 9100 -ErrorAction Stop }
   if ($addr -ne $ip) {
-    Get-Printer | Where-Object { $_.PortName -eq $ip -and $_.Name -ne $name } | ForEach-Object {
+    Get-Printer | Where-Object { $_.PortName -eq $ip -and $_.Name -ne $old } | ForEach-Object {
       Set-Printer -Name $_.Name -PortName $addr; Write-Host ("Also switched '" + $_.Name + "' to $addr") } }
-  if (Get-Printer -Name $name -ErrorAction SilentlyContinue) {
-    Get-PrintJob -PrinterName $name -ErrorAction SilentlyContinue | Remove-PrintJob -ErrorAction SilentlyContinue
-    Remove-Printer -Name $name -ErrorAction Stop }
+  if ($old) {
+    Get-PrintJob -PrinterName $old -ErrorAction SilentlyContinue | Remove-PrintJob -ErrorAction SilentlyContinue
+    Remove-Printer -Name $old -ErrorAction Stop }
   Add-Printer -Name $name -DriverName $driver -PortName $addr -ErrorAction Stop
 } catch { Write-Host ('Something went wrong: ' + $_.Exception.Message) -ForegroundColor Red; return }
 Write-Host ''
