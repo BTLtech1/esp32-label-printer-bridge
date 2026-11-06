@@ -22,6 +22,7 @@
   .tip{margin-top:6px;font-size:14px;color:var(--muted)}
   .tip summary{cursor:pointer;color:var(--accent);font-weight:600;width:max-content}
   .tip p{margin:6px 0 0}
+  .tip-title{color:var(--accent);font-weight:600}
   .cmd{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
   .cmd code{flex:1 1 260px;padding:10px;font-size:14px;word-break:break-all;border:1px solid var(--line)}
   .cmd button{font:600 15px system-ui,sans-serif;padding:10px 16px;border:0;border-radius:8px;background:var(--accent);color:#fff;cursor:pointer}
@@ -86,11 +87,11 @@
   <div class="card">
     <h2>Step 2: Click Install</h2>
     <p>A list pops up. Pick the board and click <b>Connect</b>, then follow the prompts.</p>
-    <details class="tip"><summary>Which one is the board?</summary>
+    <div class="tip"><div class="tip-title">Which one is the board?</div>
       <p>It's usually called <b>USB Single Serial</b>, <b>CH340</b>, <b>CH343</b>, <b>CP210x</b> or <b>USB JTAG/serial</b>. Ignore anything that says Bluetooth.</p>
       <p>Still not sure? Click Cancel, unplug the board, and click Install again. The one that disappeared is your board.</p>
       <p>Picked the wrong one? No harm done. The installer checks that it found the right kind of board before it changes anything.</p>
-    </details>
+    </div>
     <p style="margin-top:16px">
       <esp-web-install-button manifest="manifest.json">
         <button slot="activate">Install</button>
