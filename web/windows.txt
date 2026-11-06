@@ -75,4 +75,27 @@ if ($bridges.Count -gt 1) {
   Write-Host ('Found your bridge ({0}), printer: {1}' -f $pick.ip, $what) -ForegroundColor Green
   if ($pick.added) { Write-Host ("It's already added as '" + $pick.added + "'. Setting it up again (this also fixes stuck print jobs).") }
 }
+$global:BTLOpened = $false
 Invoke-Expression $pick.script
+
+# Older bridges don't offer the desktop shortcut themselves: offer it here.
+if (-not $global:BTLOpened) {
+  $host2 = $pick.name
+  $ok = $false
+  try { $t = New-Object Net.Sockets.TcpClient; $ok = $t.ConnectAsync($host2, 80).Wait(3000); $t.Close() } catch {}
+  if (-not $ok) { $host2 = $pick.ip }
+  $url = "http://$host2/"
+  Write-Host ''
+  $want = Read-Host "Want a desktop shortcut to the bridge's page (saved fliers, updates)? Type Y and press Enter, or just press Enter to skip"
+  if ($want -match '^\s*y') {
+    try {
+      $desk = [Environment]::GetFolderPath('Desktop')
+      $label = if ($pick.printer) { $pick.printer } else { $pick.name -replace '\.local$', '' }
+      $lnk = Join-Path $desk ((('BTL Print Bridge - ' + $label) -replace '[\\/:*?"<>|]', '') + '.url')
+      Set-Content -Path $lnk -Encoding ASCII -Value "[InternetShortcut]`r`nURL=$url`r`nIconFile=C:\Windows\System32\shell32.dll`r`nIconIndex=16`r`n"
+      Write-Host ("Made a desktop shortcut: '" + [IO.Path]::GetFileNameWithoutExtension($lnk) + "'.")
+    } catch { Write-Host "Couldn't make the shortcut. You can open $url in your browser instead." -ForegroundColor Yellow }
+  }
+  Write-Host "Opening the bridge's page: $url"
+  Start-Process explorer.exe $url   # explorer opens it in your normal (not Administrator) browser
+}

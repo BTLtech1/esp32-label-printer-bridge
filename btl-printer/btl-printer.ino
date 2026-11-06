@@ -575,6 +575,21 @@ Write-Host 'Last step: in the window that opens, set the paper size to your labe
 Start-Process rundll32.exe -ArgumentList "printui.dll,PrintUIEntry /e /n `"$name`"" -Wait
 Get-CimInstance Win32_Printer -Filter "Name='$name'" | Invoke-CimMethod -MethodName PrintTestPage | Out-Null
 Write-Host "Sent a test page. Done! Choose '$name' when you print from any app." -ForegroundColor Green
+# Optional desktop shortcut to this bridge's page (saved fliers, status, updates), then open the page once.
+$url = "http://$addr/"
+Write-Host ''
+$want = Read-Host "Want a desktop shortcut to the bridge's page (saved fliers, updates)? Type Y and press Enter, or just press Enter to skip"
+if ($want -match '^\s*y') {
+  try {
+    $desk = [Environment]::GetFolderPath('Desktop')
+    $lnk = Join-Path $desk ((('BTL Print Bridge - ' + $name) -replace '[\\/:*?"<>|]', '') + '.url')
+    Set-Content -Path $lnk -Encoding ASCII -Value "[InternetShortcut]`r`nURL=$url`r`nIconFile=C:\Windows\System32\shell32.dll`r`nIconIndex=16`r`n"
+    Write-Host ("Made a desktop shortcut: '" + [IO.Path]::GetFileNameWithoutExtension($lnk) + "'.")
+  } catch { Write-Host "Couldn't make the shortcut. You can open $url in your browser instead." -ForegroundColor Yellow }
+}
+Write-Host "Opening the bridge's page: $url"
+Start-Process explorer.exe $url   # explorer opens it in your normal (not Administrator) browser
+$global:BTLOpened = $true
 )PS";
 
 void handleWinScript() {

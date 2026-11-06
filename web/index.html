@@ -26,6 +26,9 @@
   .cmd{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
   .cmd code{flex:1 1 260px;padding:10px;font-size:14px;word-break:break-all;border:1px solid var(--line)}
   .cmd button{font:600 15px system-ui,sans-serif;padding:10px 16px;border:0;border-radius:8px;background:var(--accent);color:#fff;cursor:pointer}
+  .bridge{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .bridge input{flex:1 1 200px;font:15px system-ui,sans-serif;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
+  .bridge button{font:600 15px system-ui,sans-serif;padding:10px 16px;border:0;border-radius:8px;background:var(--accent);color:#fff;cursor:pointer}
   .ports{width:100%;height:auto;display:block;margin:12px 0 4px;font-family:system-ui,"Segoe UI",sans-serif}
   .ports .pcb{fill:var(--pcb);stroke:var(--line);stroke-width:2}
   .ports .chip{fill:var(--chip);stroke:var(--line)}
@@ -127,14 +130,18 @@
       <li>It finds your bridge by itself (with more than one, press <b>Enter</b> to pick the new one). Press <b>Enter</b> to use the driver it suggests, press <b>Enter</b> again to name it after your printer (or type your own name), pick your label size, click <b>OK</b>. A test page prints.</li>
     </ol>
     <p>Done. Press <b>Ctrl+P</b> in any app and choose your printer's name with <b>(Wi-Fi)</b> after it.</p>
+    <p>At the end it opens the bridge's page, and offers a desktop shortcut to it (type <b>Y</b> if you want one). That page is where you save fliers (Step 6), see the status and update the bridge.</p>
     <p class="muted">Your printer's driver must be installed on this PC first (plug the printer in by USB once, or use the maker's installer). Got more than one bridge? Run the line once for each. Mac: see the <a href="https://github.com/BTLtech1/esp32-label-printer-bridge#add-it-to-your-computer">guide</a>.</p>
   </div>
 
   <div class="card">
     <h2>Step 6 (optional): Print buttons</h2>
     <p>Save up to 5 fliers on the bridge, then print one with the press of a button. No computer needed.</p>
-    <ol>
-      <li>Open the bridge's page: type <b>btl-printer-XXXX.local</b> into your browser (the window in Step 5 shows your bridge's name), or the board's IP address. Under <b>Saved fliers</b>, open <b>Change this button</b> and click <b>Save next print here</b>. The light turns yellow while it waits.</li>
+    <div class="bridge"><input id="bn" placeholder="Your bridge, e.g. btl-printer-c854 or 192.168.1.50" autocomplete="off" spellcheck="false" aria-label="Your bridge's name or IP address">
+      <button type="button" id="bo">Open my bridge</button></div>
+    <p class="muted">Type its name once (shown at the end of Step 5) and this page remembers it.</p>
+    <ol style="margin-top:12px">
+      <li>Open the bridge's page: use the box above (or the <b>BTL Print Bridge</b> desktop shortcut, if you made one in Step 5). Under <b>Saved fliers</b>, open <b>Change this button</b> and click <b>Save next print here</b>. The light turns yellow while it waits.</li>
       <li>Within 5 minutes, print your flier from your computer as usual. The bridge saves it instead of printing it.</li>
       <li>Print it: <b>press</b> the button for 1 copy, <b>hold it 2 seconds</b> for a batch (10 copies unless you change it), and press any button to stop.</li>
     </ol>
@@ -154,6 +161,26 @@
     var b = this, t = document.getElementById('cmd').textContent;
     navigator.clipboard.writeText(t).then(function () { b.textContent = 'Copied!'; setTimeout(function () { b.textContent = 'Copy'; }, 2000); });
   });
+  (function () {
+    var bn = document.getElementById('bn'), key = 'btlBridge';
+    try { bn.value = localStorage.getItem(key) || ''; } catch (e) {}
+    function addr(v) {
+      v = v.trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, '');
+      if (!v) return '';
+      v = v.toLowerCase();
+      if (/^[0-9a-f]{4}$/i.test(v)) v = 'btl-printer-' + v;                 // just the 4 letters/numbers
+      if (!/^\d{1,3}(\.\d{1,3}){3}(:\d+)?$/.test(v) && v.indexOf('.') < 0) v += '.local';
+      return v;
+    }
+    function open() {
+      var a = addr(bn.value);
+      if (!a) { bn.focus(); return; }
+      try { localStorage.setItem(key, bn.value.trim()); } catch (e) {}
+      window.open('http://' + a + '/', '_blank', 'noopener');
+    }
+    document.getElementById('bo').addEventListener('click', open);
+    bn.addEventListener('keydown', function (e) { if (e.key === 'Enter') open(); });
+  })();
 </script>
 </body>
 </html>
