@@ -104,9 +104,11 @@ A flier is saved exactly as your printer's driver made it, so reprint it on the 
 
 | Button | Pin |
 |---|---|
-| 1 | GPIO 4 (the board's **BOOT** button also works as button 1) |
+| 1 | GPIO 4 |
 | 2 | GPIO 5 |
 | 3 | GPIO 6 |
+
+**No buttons yet?** Use the board's own **BOOT** button: **1, 2 or 3 quick clicks** print Flier 1, 2 or 3. Hold on the last click (e.g. click, click, hold) for that flier's batch.
 
 Any momentary push button works: arcade buttons, big dome buttons, tactile switches, or mechanical keyboard switches in a 3D-printed case. Female-to-female jumper wires push onto the board's pins, so no soldering is needed if your buttons have wire leads.
 

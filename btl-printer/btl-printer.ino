@@ -26,7 +26,7 @@
 #include "config.h"
 #include <ImprovWiFiLibrary.h>   // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.7.1"
+#define FIRMWARE_VERSION "1.7.2"
 ImprovWiFi improv(&Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -283,20 +283,37 @@ void serviceButtons() {
   static uint32_t downAt[FLIER_COUNT + 1] = {};
   static bool held[FLIER_COUNT + 1] = {};
   static uint32_t lastAction = 0;
-  for (int i = 0; i <= FLIER_COUNT; i++) {
-    // i == 0 is the board's BOOT button (GPIO 0), which also acts as button 1.
-    uint8_t pin = i == 0 ? 0 : flierPins[i - 1];
-    int n = i == 0 ? 1 : i;
-    bool down = digitalRead(pin) == LOW;
+  // Wired buttons: GPIO pins, one per flier. Press = 1 copy, hold 2 s = batch.
+  for (int i = 1; i <= FLIER_COUNT; i++) {
+    bool down = digitalRead(flierPins[i - 1]) == LOW;
     if (down && !downAt[i]) {                       // just pressed
       downAt[i] = millis(); held[i] = false;
       if (jobLeft && millis() - lastAction > 500) { stopFlier(); held[i] = true; lastAction = millis(); }  // any press stops a batch
     } else if (down && !held[i] && millis() - downAt[i] > 2000) {   // held 2 s: batch
-      held[i] = true; lastAction = millis(); startFlier(n, flierBatch[n]);
+      held[i] = true; lastAction = millis(); startFlier(i, flierBatch[i]);
     } else if (!down && downAt[i]) {                // released
-      if (!held[i] && millis() - downAt[i] > 30 && millis() - lastAction > 500) { lastAction = millis(); startFlier(n, 1); }
+      if (!held[i] && millis() - downAt[i] > 30 && millis() - lastAction > 500) { lastAction = millis(); startFlier(i, 1); }
       downAt[i] = 0;
     }
+  }
+  // The board's BOOT button (GPIO 0) counts clicks: 1, 2 or 3 quick clicks = Flier 1, 2 or 3.
+  // Holding on the last click prints that flier's batch amount. Any press while printing stops.
+  static uint32_t bDown = 0, bLastUp = 0;
+  static int bClicks = 0;
+  static bool bHeld = false;
+  bool d = digitalRead(0) == LOW;
+  if (d && !bDown) {
+    bDown = millis(); bHeld = false;
+    if (jobLeft) { stopFlier(); bHeld = true; bClicks = 0; lastAction = millis(); }
+  } else if (d && !bHeld && millis() - bDown > 2000) {
+    bHeld = true; lastAction = millis();
+    startFlier(min(bClicks + 1, FLIER_COUNT), flierBatch[min(bClicks + 1, FLIER_COUNT)]); bClicks = 0;
+  } else if (!d && bDown) {
+    if (!bHeld && millis() - bDown > 30) { bClicks++; bLastUp = millis(); }
+    bDown = 0;
+  }
+  if (!d && bClicks && millis() - bLastUp > 600) {   // clicking finished
+    lastAction = millis(); startFlier(min(bClicks, FLIER_COUNT), 1); bClicks = 0;
   }
 }
 
@@ -531,7 +548,7 @@ void handleRoot() {
     h += "<div class=card><b>Saved fliers</b><br><small>Save any print to a button: click <b>Save next print</b>, then print the flier from your computer to this printer "
          "within " + String(CAPTURE_MINUTES) + " minutes. It's stored instead of printed. "
          "Then <b>press</b> the button for 1 copy, <b>hold it 2 seconds</b> for the batch amount, and press any button to stop. "
-         "Buttons: GPIO 4, 5, 6 to GND (the board's BOOT button works as button 1).</small>";
+         "Buttons: GPIO 4, 5, 6 to GND. No buttons wired? Use the board's <b>BOOT</b> button: 1, 2 or 3 quick clicks = Flier 1, 2 or 3 (hold on the last click for the batch).</small>";
     if (!fsReady) h += "<p class=bad>Storage isn't available on this board.</p>";
     for (int n = 1; n <= FLIER_COUNT; n++) {
       size_t z = flierSize(n);

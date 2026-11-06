@@ -12,6 +12,6 @@
 // Saved fliers: press a button and one copy prints.
 #define FLIER_COUNT        3
 // Buttons: wire each between this pin and GND (no resistor needed).
-// GPIO 4, 5, 6 = Flier 1, 2, 3. The board's BOOT button also prints Flier 1.
+// GPIO 4, 5, 6 = Flier 1, 2, 3. The board's BOOT button also works: 1, 2 or 3 quick clicks.
 #define FLIER_BUTTON_PINS  {4, 5, 6}
 #define CAPTURE_MINUTES    5                    // how long "save the next print" waits
