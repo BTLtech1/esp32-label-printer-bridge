@@ -4,56 +4,162 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Install BTL Print Bridge</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3CradialGradient id='g'%3E%3Cstop offset='0' stop-color='%23ffbf1f' stop-opacity='.7'/%3E%3Cstop offset='1' stop-color='%23ffbf1f' stop-opacity='0'/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='%2315171d'/%3E%3Ccircle cx='32' cy='32' r='24' fill='url(%23g)'/%3E%3Ccircle cx='32' cy='32' r='13' fill='%23ffbf1f'/%3E%3C/svg%3E">
+<meta name="theme-color" content="#15171d">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
 <script type="module" src="https://unpkg.com/esp-web-tools@10.1.1/dist/web/install-button.js?module"></script>
 <style>
-  :root{--bg:#f3f2ef;--panel:#fff;--ink:#16181d;--muted:#5f6470;--line:#dcdad4;--accent:#d9471f;--uart:#2563c9;--pcb:#2f5d46;--chip:#30343c;color-scheme:light}
-  @media (prefers-color-scheme: dark){:root{--bg:#121318;--panel:#1b1d24;--ink:#eceef2;--muted:#9aa0ab;--line:#2c2f39;--accent:#f06a41;--uart:#6aa6ff;--pcb:#2b4d3b;--chip:#3a3f49;color-scheme:dark}}
-  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 system-ui,"Segoe UI",sans-serif;padding:32px max(16px,env(safe-area-inset-left,0px))}
-  main{max-width:640px;margin:0 auto;display:grid;gap:16px}
-  h1{font-size:28px;margin:0}
-  h2{font-size:18px;margin:0 0 6px}
-  .card p{margin:6px 0 0}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px}
-  ol{margin:0;padding-left:20px;display:grid;gap:8px}
-  .muted{color:var(--muted);font-size:14px}
-  esp-web-install-button button[slot=activate]{font:600 17px system-ui,sans-serif;padding:14px 22px;border:0;border-radius:10px;background:var(--accent);color:#fff;cursor:pointer}
-  a{color:var(--accent)}
-  code{background:var(--bg);padding:2px 6px;border-radius:5px}
-  .tip{margin-top:6px;font-size:14px;color:var(--muted)}
-  .tip summary{cursor:pointer;color:var(--accent);font-weight:600;width:max-content}
-  .tip p{margin:6px 0 0}
-  .tip-title{color:var(--accent);font-weight:600}
-  .cmd{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
-  .cmd code{flex:1 1 260px;padding:10px;font-size:14px;word-break:break-all;border:1px solid var(--line)}
-  .cmd button{font:600 15px system-ui,sans-serif;padding:10px 16px;border:0;border-radius:8px;background:var(--accent);color:#fff;cursor:pointer}
-  .bridge{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-  .bridge input{flex:1 1 200px;font:15px system-ui,sans-serif;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
-  .bridge button{font:600 15px system-ui,sans-serif;padding:10px 16px;border:0;border-radius:8px;background:var(--accent);color:#fff;cursor:pointer}
-  .ports{width:100%;height:auto;display:block;margin:12px 0 4px;font-family:system-ui,"Segoe UI",sans-serif}
-  .ports .pcb{fill:var(--pcb);stroke:var(--line);stroke-width:2}
-  .ports .chip{fill:var(--chip);stroke:var(--line)}
-  .ports .chiptxt{fill:#e9eaee;font:600 18px ui-monospace,Consolas,monospace;text-anchor:middle}
+  /* Colours and type match btlstore.com. The one flourish is the bokeh behind the title. */
+  :root{
+    --bg:#f5f6f8; --surface:#fff; --ink:#15171d; --muted:#5a6070; --line:#dde1e8;
+    --glow:#ffbf1f; --glow-soft:rgba(255,191,31,.22); --glow-ink:#8a5d00; --on-glow:#1b1400;
+    --cool:#3f6fae; --led:#2fb35a;
+    --f-display:"Bricolage Grotesque","Avenir Next",system-ui,sans-serif;
+    --f-body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+    --f-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
+    /* installer pop-up (ESP Web Tools) */
+    --mdc-theme-primary:#15171d; --mdc-theme-secondary:#ffbf1f;
+    color-scheme:light;
+  }
+  @media (prefers-color-scheme: dark){:root{
+    --bg:#0f1115; --surface:#171a21; --ink:#eceef3; --muted:#9aa1b0; --line:#282d37;
+    --glow:#ffc83a; --glow-soft:rgba(255,200,58,.14); --glow-ink:#ffc83a;
+    --cool:#86aee6; color-scheme:dark}}
+  *,*::before,*::after{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.6 var(--f-body)}
+  a{color:inherit;text-decoration-color:var(--glow);text-decoration-thickness:2px;text-underline-offset:3px}
+  a:hover{color:var(--glow-ink)}
+  :focus-visible{outline:2px solid var(--glow);outline-offset:3px;border-radius:4px}
+  b{font-weight:600}
+  .wrap{max-width:720px;margin:0 auto;padding-inline:max(16px,env(safe-area-inset-left,0px))}
+
+  /* header */
+  .top{border-bottom:1px solid var(--line)}
+  .top .wrap{display:flex;align-items:center;gap:16px;padding-block:14px}
+  .mark{display:flex;align-items:baseline;gap:8px;text-decoration:none;font:700 22px/1 var(--f-display);letter-spacing:.02em;color:var(--ink)}
+  .mark:hover{color:var(--ink)}
+  .mark-dot{width:10px;height:10px;border-radius:50%;background:var(--glow);box-shadow:0 0 0 4px var(--glow-soft);align-self:center}
+  .mark-sub{font:500 14px/1 var(--f-body);color:var(--muted);letter-spacing:0}
+  .top nav{margin-left:auto;font-size:15px}
+  .top nav a{color:var(--muted);text-decoration:none}
+  .top nav a:hover{color:var(--ink)}
+
+  /* hero with bokeh */
+  .hero{position:relative;overflow:hidden;border-bottom:1px solid var(--line)}
+  .bokeh{position:absolute;inset:0;pointer-events:none}
+  .bokeh i{position:absolute;left:var(--x);top:var(--y);width:var(--s);aspect-ratio:1;border-radius:50%;
+    transform:translate(-50%,-50%);opacity:var(--o);filter:blur(var(--b));
+    background:radial-gradient(circle closest-side, color-mix(in srgb,var(--glow) 55%,transparent) 0 62%, color-mix(in srgb,var(--glow) 85%,transparent) 86%, transparent 100%)}
+  @media (prefers-color-scheme: light){.bokeh{opacity:.7}}
+  @media (max-width:640px){.bokeh{opacity:.45}}
+  .hero .wrap{position:relative;padding-block:64px 56px}
+  h1{font:700 clamp(36px,7vw,60px)/1.05 var(--f-display);letter-spacing:-.015em;margin:0;max-width:12ch;text-wrap:balance}
+  .lede{font-size:19px;color:var(--muted);margin:16px 0 0;max-width:40ch}
+
+  /* port diagram panel */
+  .ports-panel{margin:40px 0 0;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px 22px 18px}
+  h2{font:700 22px/1.2 var(--f-display);letter-spacing:-.01em;margin:0}
+  .ports-panel p{margin:6px 0 0}
+  .muted{color:var(--muted);font-size:15px}
+  .ports{width:100%;height:auto;display:block;margin:14px 0 6px;font-family:var(--f-body)}
+  .ports .pcb{fill:#2f5d46;stroke:var(--line);stroke-width:2}
+  .ports .chip{fill:#30343c;stroke:var(--line)}
+  .ports .chiptxt{fill:#e9eaee;font:500 17px var(--f-mono);text-anchor:middle}
   .ports .port{stroke:var(--ink);stroke-width:2}
-  .ports .uartfill{fill:var(--uart)} .ports .usbfill{fill:var(--accent)}
-  .ports .portlbl{font:700 20px system-ui,sans-serif;text-anchor:middle}
-  .ports .uart{fill:var(--uart)} .ports .usb{fill:var(--accent)}
+  .ports .uartfill{fill:var(--cool)} .ports .usbfill{fill:var(--glow)}
+  .ports .portlbl{font:700 20px var(--f-display);text-anchor:middle}
+  .ports .portlbl.uart{fill:#a9c8f2} .ports .portlbl.usb{fill:#ffd36b}
+  .ports .uart{fill:var(--cool)} .ports .usb{fill:var(--glow-ink)}
   .ports .cable{fill:none;stroke-width:7;stroke-linecap:round}
-  .ports .uartline{stroke:var(--uart)} .ports .usbline{stroke:var(--accent)}
-  .ports .dev{fill:var(--panel);stroke:var(--ink);stroke-width:3;stroke-linejoin:round}
+  .ports .uartline{stroke:var(--cool)} .ports .usbline{stroke:var(--glow)}
+  .ports .dev{fill:var(--surface);stroke:var(--ink);stroke-width:3;stroke-linejoin:round}
   .ports .screen{fill:var(--bg);stroke:var(--line)}
   .ports .label{fill:#fff;stroke:var(--ink);stroke-width:2}
-  .ports .led{fill:#2fb35a}
-  .ports .cap{font:700 24px system-ui,sans-serif}
-  .ports .sub{fill:var(--ink);font:500 19px system-ui,sans-serif}
+  .ports .led{fill:var(--led)}
+  .ports .cap{font:700 24px var(--f-display)}
+  .ports .sub{fill:var(--ink);font:500 19px var(--f-body)}
+
+  /* steps: a numbered rail */
+  .steps{list-style:none;margin:48px 0 0;padding:0;counter-reset:step}
+  .step{position:relative;padding:0 0 44px 64px;counter-increment:step}
+  .step::before{content:counter(step);position:absolute;left:0;top:-4px;width:40px;height:40px;border-radius:50%;
+    display:grid;place-items:center;font:700 19px/1 var(--f-display);background:var(--surface);border:1px solid var(--line);color:var(--ink)}
+  .step::after{content:"";position:absolute;left:19.5px;top:44px;bottom:8px;width:1px;background:var(--line)}
+  .step:last-child{padding-bottom:8px}
+  .step:last-child::after{display:none}
+  .step.optional::before{border-style:dashed}
+  .step p{margin:8px 0 0}
+  .step ol{margin:10px 0 0;padding-left:20px;display:grid;gap:10px}
+  .step h2 .opt{font:500 15px var(--f-body);color:var(--muted);letter-spacing:0;margin-left:6px}
+  .sub-h{font-weight:600;margin:16px 0 0}
+
+  /* buttons: pills like the store */
+  .btn, esp-web-install-button button[slot=activate]{font:600 16px/1 var(--f-body);padding:13px 22px;border:0;border-radius:999px;background:var(--ink);color:var(--bg);cursor:pointer;transition:background .15s,color .15s}
+  .btn:hover, esp-web-install-button button[slot=activate]:hover{background:var(--glow);color:var(--on-glow)}
+  esp-web-install-button button[slot=activate]{font-size:18px;padding:16px 34px;box-shadow:0 0 0 6px var(--glow-soft)}
+  .install{margin:20px 0 4px}
+
+  /* the copy-paste line */
+  .cmd{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
+  .cmd code{flex:1 1 280px;font:500 13.5px/1.5 var(--f-mono);padding:11px 14px;background:var(--surface);border:1px solid var(--line);border-radius:10px;word-break:break-all}
+  code{font-family:var(--f-mono);font-size:.9em}
+
+  /* bridge address box */
+  .bridge{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .bridge input{flex:1 1 220px;font:400 16px var(--f-body);padding:11px 16px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--ink)}
+  .bridge input:focus-visible{outline:2px solid var(--glow);outline-offset:1px}
+
+  /* fold-outs */
+  details{margin-top:10px;font-size:15px;color:var(--muted)}
+  summary{cursor:pointer;color:var(--ink);font-weight:600;width:max-content;max-width:100%}
+  summary::marker{color:var(--glow-ink)}
+  details p{margin:6px 0 0}
+  .aside{margin-top:14px;padding:12px 16px;border-left:3px solid var(--glow);background:var(--surface);border-radius:0 10px 10px 0;font-size:15px;color:var(--muted)}
+  .aside p{margin:4px 0 0}
+  .aside p:first-child{margin:0}
+  .aside .t{color:var(--ink);font-weight:600}
+
+  footer{border-top:1px solid var(--line);margin-top:24px}
+  footer .wrap{padding-block:24px 40px;font-size:15px;color:var(--muted);display:grid;gap:10px}
+  footer p{margin:0}
+
+  @media (max-width:520px){
+    .step{padding-left:52px}
+    .step::before{width:34px;height:34px;font-size:17px}
+    .step::after{left:16.5px;top:38px}
+    .ports-panel{padding:18px 16px 14px}
+  }
+  @media (prefers-reduced-motion: reduce){*{transition:none!important}}
 </style>
 </head>
 <body>
-<main>
-  <h1>Set up your BTL Print Bridge</h1>
-  <p>Turn your USB label printer into a Wi-Fi printer. Takes about 5 minutes.</p>
+<header class="top"><div class="wrap">
+  <a class="mark" href="https://btlstore.com" aria-label="BTL, Bring the Light"><span class="mark-dot" aria-hidden="true"></span>BTL<span class="mark-sub">Print Bridge</span></a>
+  <nav><a href="https://github.com/BTLtech1/esp32-label-printer-bridge">Guide &amp; source</a></nav>
+</div></header>
 
-  <div class="card">
-    <h2>Which port is which?</h2>
+<section class="hero">
+  <div class="bokeh" aria-hidden="true">
+    <i style="--x:78%;--y:30%;--s:210px;--o:.55;--b:2px"></i>
+    <i style="--x:92%;--y:72%;--s:130px;--o:.45;--b:4px"></i>
+    <i style="--x:64%;--y:82%;--s:90px;--o:.35;--b:1px"></i>
+    <i style="--x:96%;--y:12%;--s:160px;--o:.3;--b:9px"></i>
+    <i style="--x:68%;--y:12%;--s:40px;--o:.45;--b:1px"></i>
+    <i style="--x:86%;--y:50%;--s:58px;--o:.3;--b:3px"></i>
+    <i style="--x:44%;--y:108%;--s:240px;--o:.18;--b:14px"></i>
+    <i style="--x:8%;--y:-10%;--s:300px;--o:.22;--b:22px"></i>
+  </div>
+  <div class="wrap">
+    <h1>Set up your BTL Print Bridge</h1>
+    <p class="lede">Turn your USB label printer into a Wi-Fi printer. Takes about 5 minutes.</p>
+  </div>
+</section>
+
+<main class="wrap">
+  <section class="ports-panel" aria-labelledby="ports-h">
+    <h2 id="ports-h">Which port is which?</h2>
     <p>The board has two USB-C ports. It matters which one you use.</p>
     <svg class="ports" viewBox="0 0 560 400" role="img" aria-label="The UART/COM port connects to your computer or a charger for power and installing. The USB port connects to the label printer.">
       <rect x="180" y="10" width="200" height="150" rx="12" class="pcb"/>
@@ -79,88 +185,95 @@
       <text x="450" y="385" class="sub" text-anchor="middle">&#10060; Not for installing</text>
     </svg>
     <p class="muted"><b>UART/COM is for power and setup, USB is for the printer.</b> Once the bridge is running, the USB port only talks to the printer and won't show up on your computer, so always install and update through UART/COM.</p>
-  </div>
+  </section>
 
-  <div class="card">
-    <h2>Step 1: Plug in the board</h2>
-    <p>Use a USB-C cable to plug the board into this computer. Use the port on the board marked <b>UART</b> (or <b>COM</b>).</p>
-    <p class="muted">Board doesn't light up later on a USB-C phone charger? Many boards need a <b>USB-A to USB-C</b> cable on this port. Your computer works either way.</p>
-  </div>
+  <ol class="steps">
+    <li class="step">
+      <h2>Plug in the board</h2>
+      <p>Use a USB-C cable to plug the board into this computer. Use the port on the board marked <b>UART</b> (or <b>COM</b>).</p>
+      <p class="muted">Board doesn't light up later on a USB-C phone charger? Many boards need a <b>USB-A to USB-C</b> cable on this port. Your computer works either way.</p>
+    </li>
 
-  <div class="card">
-    <h2>Step 2: Click Install</h2>
-    <p>A list pops up. Pick the board and click <b>Connect</b>, then follow the prompts.</p>
-    <div class="tip"><div class="tip-title">Which one is the board?</div>
-      <p>It's usually called <b>USB Single Serial</b>, <b>CH340</b>, <b>CH343</b>, <b>CP210x</b> or <b>USB JTAG/serial</b>. Ignore anything that says Bluetooth.</p>
-      <p>Still not sure? Click Cancel, unplug the board, and click Install again. The one that disappeared is your board.</p>
-      <p>Picked the wrong one? No harm done. The installer checks that it found the right kind of board before it changes anything.</p>
-    </div>
-    <p style="margin-top:16px">
-      <esp-web-install-button manifest="manifest.json">
-        <button slot="activate">Install</button>
-        <span slot="unsupported">This page only works in <b>Chrome</b> or <b>Edge</b> on a computer.</span>
-        <span slot="not-allowed">Open this page over https to install.</span>
-      </esp-web-install-button>
-    </p>
-    <p class="muted"><b>Asked to "Erase device"?</b> First install: tick it. Updating a bridge you already set up: leave it unticked to keep your settings.</p>
-    <p class="muted">Nothing shows up in the list? Try a different USB cable: many cables only charge and can't send data. Stuck on connecting? Hold the board's <b>BOOT</b> button while you click Install.</p>
-  </div>
+    <li class="step">
+      <h2>Click Install</h2>
+      <p>A list pops up. Pick the board and click <b>Connect</b>, then follow the prompts.</p>
+      <div class="aside">
+        <p class="t">Which one is the board?</p>
+        <p>It's usually called <b>USB Single Serial</b>, <b>CH340</b>, <b>CH343</b>, <b>CP210x</b> or <b>USB JTAG/serial</b>. Ignore anything that says Bluetooth.</p>
+        <p>Still not sure? Click Cancel, unplug the board, and click Install again. The one that disappeared is your board.</p>
+        <p>Picked the wrong one? No harm done. The installer checks that it found the right kind of board before it changes anything.</p>
+      </div>
+      <div class="install">
+        <esp-web-install-button manifest="manifest.json">
+          <button slot="activate">Install</button>
+          <span slot="unsupported">This page only works in <b>Chrome</b> or <b>Edge</b> on a computer.</span>
+          <span slot="not-allowed">Open this page over https to install.</span>
+        </esp-web-install-button>
+      </div>
+      <p class="muted"><b>Asked to "Erase device"?</b> First install: tick it. Updating a bridge you already set up: leave it unticked to keep your settings.</p>
+      <p class="muted">Nothing shows up in the list? Try a different USB cable: many cables only charge and can't send data. Stuck on connecting? Hold the board's <b>BOOT</b> button while you click Install.</p>
+    </li>
 
-  <div class="card">
-    <h2>Step 3: Type your Wi-Fi</h2>
-    <p>When it finishes, it asks for your Wi-Fi name and password. Type them in and click <b>Connect</b>. When it says it's connected, click <b>Continue</b>, close the box, and go on to Step 4.</p>
-    <p class="muted">Use your 2.4 GHz Wi-Fi. Most home routers have it; if you see two names, pick the one without "5G".</p>
-  </div>
+    <li class="step">
+      <h2>Type your Wi-Fi</h2>
+      <p>When it finishes, it asks for your Wi-Fi name and password. Type them in and click <b>Connect</b>. When it says it's connected, click <b>Continue</b>, close the box, and go on to Step 4.</p>
+      <p class="muted">Use your 2.4 GHz Wi-Fi. Most home routers have it; if you see two names, pick the one without "5G".</p>
+      <details><summary>Wi-Fi step didn't show up?</summary>
+        <p>Join the Wi-Fi network <b>BTL-Printer-Setup</b> from your phone or computer. A page opens (or go to <code>http://192.168.4.1</code>). Type your Wi-Fi there and save.</p>
+      </details>
+    </li>
 
-  <div class="card">
-    <h2>Step 4: Plug in your printer</h2>
-    <p>Plug your label printer into the board's other port, marked <b>USB</b>, and turn the printer on. The light on the board turns <b>green</b> when the printer is ready. (Red = no printer yet, purple = not on your Wi-Fi yet.)</p>
-    <details class="tip"><summary>Light stays red?</summary>
-      <p>Check the printer is on and plugged into <b>USB</b>, not UART. Many printers also wait for 5&nbsp;V on the cable, which these boards don't send by default. The fix is a dab of solder (or conductive pen) across the two tiny pads marked <b>USB-OTG</b> on the board, or a small USB-C OTG adapter with a charger plugged into it. USB hubs and docks don't work. <a href="https://github.com/BTLtech1/esp32-label-printer-bridge#troubleshooting">More help</a>.</p>
-    </details>
-  </div>
+    <li class="step">
+      <h2>Plug in your printer</h2>
+      <p>Plug your label printer into the board's other port, marked <b>USB</b>, and turn the printer on. The light on the board turns <b>green</b> when the printer is ready. (Red = no printer yet, purple = not on your Wi-Fi yet.)</p>
+      <details><summary>Light stays red?</summary>
+        <p>Check the printer is on and plugged into <b>USB</b>, not UART. Many printers also wait for 5&nbsp;V on the cable, which these boards don't send by default. The fix is a dab of solder (or conductive pen) across the two tiny pads marked <b>USB-OTG</b> on the board, or a small USB-C OTG adapter with a charger plugged into it. USB hubs and docks don't work. <a href="https://github.com/BTLtech1/esp32-label-printer-bridge#troubleshooting">More help</a>.</p>
+      </details>
+    </li>
 
-  <div class="card">
-    <h2>Step 5: Add it to your Windows PC</h2>
-    <ol>
-      <li>Right-click the <b>Start</b> button &rarr; <b>Terminal (Admin)</b> &rarr; click <b>Yes</b>.</li>
-      <li>Copy this line, paste it into that window (<b>Ctrl+V</b>), and press <b>Enter</b>:
-        <div class="cmd"><code id="cmd">irm https://btltech1.github.io/esp32-label-printer-bridge/windows.txt | iex</code>
-        <button type="button" id="copy">Copy</button></div></li>
-      <li>It finds your bridge by itself (with more than one, press <b>Enter</b> to pick the new one). Press <b>Enter</b> to use the driver it suggests, press <b>Enter</b> again to name it after your printer (or type your own name), pick your label size, click <b>OK</b>. A test page prints.</li>
-    </ol>
-    <p>Done. Press <b>Ctrl+P</b> in any app and choose your printer's name with <b>(Wi-Fi)</b> after it.</p>
-    <p>At the end it opens the bridge's page, and offers a desktop shortcut to it (type <b>Y</b> if you want one). That page is where you save fliers (Step 6), see the status and update the bridge.</p>
-    <p class="muted">Your printer's driver must be installed on this PC first (plug the printer in by USB once, or use the maker's installer). Got more than one bridge? Run the line once for each. Mac: see the <a href="https://github.com/BTLtech1/esp32-label-printer-bridge#add-it-to-your-computer">guide</a>.</p>
-  </div>
+    <li class="step">
+      <h2>Add it to your Windows PC</h2>
+      <ol>
+        <li>Right-click the <b>Start</b> button, then <b>Terminal (Admin)</b>, then click <b>Yes</b>.</li>
+        <li>Copy this line, paste it into that window (<b>Ctrl+V</b>), and press <b>Enter</b>:
+          <div class="cmd"><code id="cmd">irm https://btltech1.github.io/esp32-label-printer-bridge/windows.txt | iex</code>
+          <button type="button" class="btn" id="copy">Copy</button></div></li>
+        <li>It finds your bridge by itself (with more than one, press <b>Enter</b> to pick the new one). Press <b>Enter</b> to use the driver it suggests, press <b>Enter</b> again to name it after your printer (or type your own name), pick your label size, click <b>OK</b>. A test page prints.</li>
+      </ol>
+      <p>Done. Press <b>Ctrl+P</b> in any app and choose your printer's name with <b>(Wi-Fi)</b> after it.</p>
+      <p>At the end it opens the bridge's page, and offers a desktop shortcut to it (type <b>Y</b> if you want one). That page is where you save fliers (Step 6), see the status and update the bridge.</p>
+      <p class="muted">Your printer's driver must be installed on this PC first (plug the printer in by USB once, or use the maker's installer). Got more than one bridge? Run the line once for each. Mac: see the <a href="https://github.com/BTLtech1/esp32-label-printer-bridge#add-it-to-your-computer">guide</a>.</p>
+    </li>
 
-  <div class="card">
-    <h2>Step 6 (optional): Saved fliers</h2>
-    <p>Save up to 5 fliers on the bridge, then print them with the board's <b>BOOT</b> button. No computer needed.</p>
-    <div class="bridge"><input id="bn" placeholder="Your bridge, e.g. btl-printer-c854 or 192.168.1.50" autocomplete="off" spellcheck="false" aria-label="Your bridge's name or IP address">
-      <button type="button" id="bo">Open my bridge</button></div>
-    <p class="muted">Type it once and this page remembers it. The name is <b>btl-printer-</b> plus 4 letters/numbers; you can type just those 4. Don't know it? Run the line from Step 5 again: it finds your bridge, shows its name and opens its page. It's also in your router's device list.</p>
-    <ol style="margin-top:12px">
-      <li>Open the bridge's page: use the box above (or the <b>BTL Print Bridge</b> desktop shortcut, if you made one in Step 5). Under <b>Saved fliers</b>, pick a flier, open <b>Change this flier</b> and click <b>Save next print here</b>. The light turns yellow while it waits.</li>
-      <li>Within 5 minutes, print your flier from your computer as usual. The bridge saves it instead of printing it.</li>
-      <li>Print it with the <b>BOOT</b> button: click once for Flier 1, twice quickly for Flier 2, and so on up to 5. For a batch, hold the last click for 2 seconds (Flier 2: click, click-and-hold). Press again to stop a batch. A batch is 10 copies; change it next to each flier on the bridge's page.</li>
-    </ol>
-    <div class="tip" style="margin-top:12px"><div class="tip-title">Optional: add your own buttons</div>
-      <p>Want one button per flier? Wire each button to a pin, <b>GPIO 4, 5, 6, 7, 15</b> for Flier 1 to 5, and its other wire to <b>GND</b>. No resistors needed; female jumper wires push right onto the board's pins. Press = 1 copy, hold 2 seconds = batch, press again to stop.</p>
-    </div>
-    <p class="muted">A flier is saved exactly as your printer's driver made it, so print it on the same kind of printer.</p>
-  </div>
-
-  <details class="tip"><summary>Wi-Fi step didn't show up?</summary>
-    <p>Join the Wi-Fi network <b>BTL-Printer-Setup</b> from your phone or computer. A page opens (or go to <code>http://192.168.4.1</code>). Type your Wi-Fi there and save.</p>
-  </details>
-
-  <p class="muted">Source code and full guide: <a href="https://github.com/BTLtech1/esp32-label-printer-bridge">github.com/BTLtech1/esp32-label-printer-bridge</a></p>
+    <li class="step optional">
+      <h2>Saved fliers <span class="opt">optional</span></h2>
+      <p>Save up to 5 fliers on the bridge, then print them with the board's <b>BOOT</b> button. No computer needed.</p>
+      <div class="bridge"><input id="bn" placeholder="Your bridge, e.g. btl-printer-c854 or 192.168.1.50" autocomplete="off" spellcheck="false" aria-label="Your bridge's name or IP address">
+        <button type="button" class="btn" id="bo">Open my bridge</button></div>
+      <p class="muted">Type it once and this page remembers it. The name is <b>btl-printer-</b> plus 4 letters/numbers; you can type just those 4. Don't know it? Run the line from Step 5 again: it finds your bridge, shows its name and opens its page. It's also in your router's device list.</p>
+      <ol>
+        <li>Open the bridge's page: use the box above (or the <b>BTL Print Bridge</b> desktop shortcut, if you made one in Step 5). Under <b>Saved fliers</b>, pick a flier, open <b>Change this flier</b> and click <b>Save next print here</b>. The light turns yellow while it waits.</li>
+        <li>Within 5 minutes, print your flier from your computer as usual. The bridge saves it instead of printing it.</li>
+        <li>Print it with the <b>BOOT</b> button: click once for Flier 1, twice quickly for Flier 2, and so on up to 5. For a batch, hold the last click for 2 seconds (Flier 2: click, click-and-hold). Press again to stop a batch. A batch is 10 copies; change it next to each flier on the bridge's page.</li>
+      </ol>
+      <div class="aside">
+        <p class="t">Optional: add your own buttons</p>
+        <p>Want one button per flier? Wire each button to a pin, <b>GPIO 4, 5, 6, 7, 15</b> for Flier 1 to 5, and its other wire to <b>GND</b>. No resistors needed; female jumper wires push right onto the board's pins. Press = 1 copy, hold 2 seconds = batch, press again to stop.</p>
+      </div>
+      <p class="muted">A flier is saved exactly as your printer's driver made it, so print it on the same kind of printer.</p>
+    </li>
+  </ol>
 </main>
+
+<footer><div class="wrap">
+  <p>Source code and full guide: <a href="https://github.com/BTLtech1/esp32-label-printer-bridge">github.com/BTLtech1/esp32-label-printer-bridge</a></p>
+  <p>Made by <a href="https://btlstore.com">BTL</a> in Oregon.</p>
+</div></footer>
+
 <script>
   document.getElementById('copy').addEventListener('click', function () {
     var b = this, t = document.getElementById('cmd').textContent;
-    navigator.clipboard.writeText(t).then(function () { b.textContent = 'Copied!'; setTimeout(function () { b.textContent = 'Copy'; }, 2000); });
+    navigator.clipboard.writeText(t).then(function () { b.textContent = 'Copied'; setTimeout(function () { b.textContent = 'Copy'; }, 2000); });
   });
   (function () {
     var bn = document.getElementById('bn'), key = 'btlBridge';
