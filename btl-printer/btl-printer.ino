@@ -24,6 +24,7 @@
 #include <FFat.h>
 #include <Update.h>
 #include "usb/usb_host.h"
+#include "png_label.h"
 #if __has_include("esp32s3/rom/miniz.h")
 #include "esp32s3/rom/miniz.h"   // the chip's built-in inflate (tinfl), used to decode PNG labels
 #else
@@ -402,19 +403,8 @@ uint32_t lastPoll = 0;
 // the printer as a 4x6 dot image in its own language, so every barcode prints exactly as drawn,
 // even on printers that only understand part of ZPL. Optional text (X-Label-Text header, e.g.
 // "2x G3") is added on top. The PNG is decoded one row at a time, so even large labels fit.
-static const int LBL_W = 812, LBL_H = 1218, LBL_ROWB = (LBL_W + 7) / 8;  // 4x6 in at 203 dpi
 
-struct PngDec {
-  uint32_t w = 0, h = 0; uint8_t depth = 0, ctype = 0, ch = 0;
-  uint32_t stride = 0, bpp = 1;
-  uint8_t palDark[256] = {};
-  uint8_t *cur = nullptr, *prev = nullptr;  // filter byte + row
-  uint32_t fill = 0, y = 0;
-  bool rot = false; float sc = 1; int tw = 0, th = 0, ox = 0, oy = 0;
-  int16_t *sx0 = nullptr, *sx1 = nullptr, *sy0 = nullptr, *sy1 = nullptr;
-  int p0 = 0, p1 = 0;                        // next target row/col for each sample set
-  uint8_t *out = nullptr;                    // LBL_ROWB * LBL_H, 1 = black
-};
+// (PngDec, the decoder state, lives in png_label.h so Arduino's auto-generated prototypes can see it.)
 
 static inline bool pngDark(const PngDec &d, const uint8_t *row, uint32_t x) {
   if (d.depth < 8) {
