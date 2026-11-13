@@ -24,10 +24,15 @@
 #include <FFat.h>
 #include <Update.h>
 #include "usb/usb_host.h"
+#if __has_include("esp32s3/rom/miniz.h")
+#include "esp32s3/rom/miniz.h"   // the chip's built-in inflate (tinfl), used to decode PNG labels
+#else
+#include "rom/miniz.h"
+#endif
 #include "config.h"
 #include "improv_serial.h"       // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.8.3"
+#define FIRMWARE_VERSION "1.9.0"
 ImprovSerial improv(Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -52,6 +57,7 @@ bool improvConnect(const char *ssid, const char *password) {
 // ---------------------------------------------------------------- settings
 Preferences prefs;
 String cfgSsid, cfgPass, cfgQueueUrl, cfgQueueToken;
+String cfgLang = "zpl";  // printer language for queued picture labels: "zpl" or "tspl"
 
 void loadSettings() {
   prefs.begin("bridge", true);
@@ -59,6 +65,7 @@ void loadSettings() {
   cfgPass = prefs.getString("pass", "");
   cfgQueueUrl = prefs.getString("qurl", "");
   cfgQueueToken = prefs.getString("qtok", "");
+  cfgLang = prefs.getString("lang", "zpl");
   prefs.end();
 }
 
@@ -66,6 +73,7 @@ void saveSettings() {
   prefs.begin("bridge", false);
   prefs.putString("ssid", cfgSsid);
   prefs.putString("pass", cfgPass);
+  prefs.putString("lang", cfgLang);
   prefs.putString("qurl", cfgQueueUrl);
   prefs.putString("qtok", cfgQueueToken);
   prefs.end();
@@ -389,6 +397,169 @@ void serviceRawPrinting() {
 // POST <QUEUE_URL>/ack?id=<id>  after a job prints
 uint32_t lastPoll = 0;
 
+// ---------------------------------------------------------------- picture labels
+// Queue jobs that are PNG pictures (e.g. Shippo shipping labels) are decoded here and sent to
+// the printer as a 4x6 dot image in its own language, so every barcode prints exactly as drawn,
+// even on printers that only understand part of ZPL. Optional text (X-Label-Text header, e.g.
+// "2x G3") is added on top. The PNG is decoded one row at a time, so even large labels fit.
+static const int LBL_W = 812, LBL_H = 1218, LBL_ROWB = (LBL_W + 7) / 8;  // 4x6 in at 203 dpi
+
+struct PngDec {
+  uint32_t w = 0, h = 0; uint8_t depth = 0, ctype = 0, ch = 0;
+  uint32_t stride = 0, bpp = 1;
+  uint8_t palDark[256] = {};
+  uint8_t *cur = nullptr, *prev = nullptr;  // filter byte + row
+  uint32_t fill = 0, y = 0;
+  bool rot = false; float sc = 1; int tw = 0, th = 0, ox = 0, oy = 0;
+  int16_t *sx0 = nullptr, *sx1 = nullptr, *sy0 = nullptr, *sy1 = nullptr;
+  int p0 = 0, p1 = 0;                        // next target row/col for each sample set
+  uint8_t *out = nullptr;                    // LBL_ROWB * LBL_H, 1 = black
+};
+
+static inline bool pngDark(const PngDec &d, const uint8_t *row, uint32_t x) {
+  if (d.depth < 8) {
+    uint32_t bit = x * d.depth; uint8_t v = (row[bit >> 3] >> (8 - d.depth - (bit & 7))) & ((1 << d.depth) - 1);
+    return d.ctype == 3 ? d.palDark[v] : v < (1 << (d.depth - 1));
+  }
+  const uint8_t *px = row + x * d.ch;
+  switch (d.ctype) {
+    case 0: return px[0] < 128;
+    case 3: return d.palDark[px[0]];
+    case 4: return px[1] >= 128 && px[0] < 128;
+    case 6: if (px[3] < 128) return false;  // transparent = white
+    default: return ((px[0] * 77 + px[1] * 150 + px[2] * 29) >> 8) < 128;
+  }
+}
+
+static inline void dotOn(PngDec &d, int x, int y) { d.out[y * LBL_ROWB + (x >> 3)] |= 0x80 >> (x & 7); }
+
+// A full source row is ready: copy it into every output row/column that samples it.
+static void pngRowDone(PngDec &d, const uint8_t *row) {
+  uint32_t y = d.y;
+  if (!d.rot) {
+    while (d.p0 < d.th && d.sy0[d.p0] < (int)y) d.p0++;
+    for (int t = d.p0; t < d.th && d.sy0[t] == (int)y; t++)
+      for (int tx = 0; tx < d.tw; tx++) if (pngDark(d, row, d.sx0[tx])) dotOn(d, d.ox + tx, d.oy + t);
+    while (d.p1 < d.th && d.sy1[d.p1] < (int)y) d.p1++;
+    for (int t = d.p1; t < d.th && d.sy1[t] == (int)y; t++)
+      for (int tx = 0; tx < d.tw; tx++) if (pngDark(d, row, d.sx1[tx])) dotOn(d, d.ox + tx, d.oy + t);
+  } else {  // landscape picture: source rows become output columns (turned 90 degrees)
+    while (d.p0 < d.tw && d.sx0[d.p0] < (int)y) d.p0++;
+    for (int t = d.p0; t < d.tw && d.sx0[t] == (int)y; t++)
+      for (int ty = 0; ty < d.th; ty++) if (pngDark(d, row, d.w - 1 - d.sy0[ty])) dotOn(d, d.ox + t, d.oy + ty);
+    while (d.p1 < d.tw && d.sx1[d.p1] < (int)y) d.p1++;
+    for (int t = d.p1; t < d.tw && d.sx1[t] == (int)y; t++)
+      for (int ty = 0; ty < d.th; ty++) if (pngDark(d, row, d.w - 1 - d.sy1[ty])) dotOn(d, d.ox + t, d.oy + ty);
+  }
+}
+
+static void pngFeed(PngDec &d, const uint8_t *data, size_t n) {
+  while (n && d.y < d.h) {
+    size_t take = min((size_t)(d.stride + 1 - d.fill), n);
+    memcpy(d.cur + d.fill, data, take); d.fill += take; data += take; n -= take;
+    if (d.fill < d.stride + 1) break;
+    uint8_t f = d.cur[0], *r = d.cur + 1, *pr = d.prev + 1;
+    for (uint32_t x = 0; x < d.stride; x++) {
+      int a = x >= d.bpp ? r[x - d.bpp] : 0, up = d.y ? pr[x] : 0, c = (d.y && x >= d.bpp) ? pr[x - d.bpp] : 0;
+      if (f == 1) r[x] += a; else if (f == 2) r[x] += up; else if (f == 3) r[x] += (a + up) >> 1;
+      else if (f == 4) { int p = a + up - c, pa = abs(p - a), pb = abs(p - up), pc = abs(p - c); r[x] += (pa <= pb && pa <= pc) ? a : (pb <= pc ? up : c); }
+    }
+    pngRowDone(d, r);
+    uint8_t *t = d.prev; d.prev = d.cur; d.cur = t;
+    d.fill = 0; d.y++;
+  }
+}
+
+static void freePng(PngDec &d) {
+  free(d.cur); free(d.prev); free(d.sx0); free(d.sx1); free(d.sy0); free(d.sy1); free(d.out);
+}
+
+// Builds the 1-bit label image from PNG bytes. Returns an error message, or "" on success.
+static String decodePngLabel(const uint8_t *png, size_t len, PngDec &d) {
+  static const uint8_t SIG[8] = {0x89, 'P', 'N', 'G', 13, 10, 26, 10};
+  if (len < 33 || memcmp(png, SIG, 8)) return "not a PNG";
+  auto be32 = [&](size_t i) { return (uint32_t)png[i] << 24 | png[i + 1] << 16 | png[i + 2] << 8 | png[i + 3]; };
+  // Gather IHDR, PLTE and all IDAT data.
+  size_t p = 8, idatLen = 0; const uint8_t *pal = nullptr; size_t palLen = 0; uint8_t inter = 0;
+  for (size_t q = 8; q + 8 <= len; ) {
+    uint32_t n = be32(q); if (q + 12 + n > len) break;
+    if (!memcmp(png + q + 4, "IDAT", 4)) idatLen += n;
+    q += 12 + n;
+  }
+  uint8_t *idat = (uint8_t *)ps_malloc(idatLen ? idatLen : 1); if (!idat) return "out of memory";
+  size_t ip = 0;
+  while (p + 8 <= len) {
+    uint32_t n = be32(p); const uint8_t *t = png + p + 4, *dd = png + p + 8; if (p + 12 + n > len) break;
+    if (!memcmp(t, "IHDR", 4)) { d.w = be32(p + 8); d.h = be32(p + 12); d.depth = dd[8]; d.ctype = dd[9]; inter = dd[12]; }
+    else if (!memcmp(t, "PLTE", 4)) { pal = dd; palLen = n; }
+    else if (!memcmp(t, "IDAT", 4)) { memcpy(idat + ip, dd, n); ip += n; }
+    else if (!memcmp(t, "IEND", 4)) break;
+    p += 12 + n;
+  }
+  const uint8_t chans[7] = {1, 0, 3, 1, 2, 0, 4};
+  d.ch = d.ctype <= 6 ? chans[d.ctype] : 0;
+  if (!d.w || !d.h || !d.ch || inter || d.depth > 8 || d.w > 4000 || d.h > 6000) { free(idat); return "unsupported PNG"; }
+  for (size_t i = 0; i < palLen / 3; i++) d.palDark[i] = ((pal[i * 3] * 77 + pal[i * 3 + 1] * 150 + pal[i * 3 + 2] * 29) >> 8) < 128;
+  d.stride = (d.w * d.ch * d.depth + 7) / 8; d.bpp = max(1, (d.ch * d.depth) / 8);
+  d.cur = (uint8_t *)ps_calloc(d.stride + 1, 1); d.prev = (uint8_t *)ps_calloc(d.stride + 1, 1);
+  d.out = (uint8_t *)ps_calloc(LBL_ROWB * LBL_H, 1);
+  // Fit the picture into 4x6, turning landscape pictures upright. Each dot samples two nearby
+  // source pixels so thin barcode bars survive shrinking (Shippo pictures are higher resolution).
+  d.rot = d.w > d.h;
+  int sw = d.rot ? d.h : d.w, sh = d.rot ? d.w : d.h;
+  d.sc = min((float)LBL_W / sw, (float)LBL_H / sh);
+  d.tw = min(LBL_W, (int)lroundf(sw * d.sc)); d.th = min(LBL_H, (int)lroundf(sh * d.sc));
+  d.ox = (LBL_W - d.tw) / 2; d.oy = (LBL_H - d.th) / 2;
+  d.sx0 = (int16_t *)malloc(d.tw * 2); d.sx1 = (int16_t *)malloc(d.tw * 2);
+  d.sy0 = (int16_t *)malloc(d.th * 2); d.sy1 = (int16_t *)malloc(d.th * 2);
+  if (!d.cur || !d.prev || !d.out || !d.sx0 || !d.sx1 || !d.sy0 || !d.sy1) { free(idat); return "out of memory"; }
+  for (int i = 0; i < d.tw; i++) { d.sx0[i] = min(sw - 1, (int)(i / d.sc)); d.sx1[i] = min(sw - 1, (int)((i + 0.5f) / d.sc)); }
+  for (int i = 0; i < d.th; i++) { d.sy0[i] = min(sh - 1, (int)(i / d.sc)); d.sy1[i] = min(sh - 1, (int)((i + 0.5f) / d.sc)); }
+  // Inflate with the chip's built-in decompressor, using a 32 KB circular window.
+  tinfl_decompressor *inf = (tinfl_decompressor *)malloc(sizeof(tinfl_decompressor));
+  uint8_t *win = (uint8_t *)ps_malloc(TINFL_LZ_DICT_SIZE);
+  if (!inf || !win) { free(inf); free(win); free(idat); return "out of memory"; }
+  tinfl_init(inf);
+  size_t inPos = 0, winPos = 0; tinfl_status st;
+  do {
+    size_t inBytes = idatLen - inPos, outBytes = TINFL_LZ_DICT_SIZE - winPos;
+    st = tinfl_decompress(inf, idat + inPos, &inBytes, win, win + winPos, &outBytes, TINFL_FLAG_PARSE_ZLIB_HEADER);
+    inPos += inBytes;
+    pngFeed(d, win + winPos, outBytes);
+    winPos = (winPos + outBytes) & (TINFL_LZ_DICT_SIZE - 1);
+  } while (st == TINFL_STATUS_HAS_MORE_OUTPUT);
+  free(inf); free(win); free(idat);
+  if (st != TINFL_STATUS_DONE || d.y < d.h) return "couldn't decompress the PNG";
+  return "";
+}
+
+// Sends the decoded label to the printer in ZPL or TSPL, with the optional text on top.
+static bool printLabelImage(const PngDec &d, String text) {
+  text.replace("^", ""); text.replace("~", ""); text.replace("\"", "'"); text = text.substring(0, 40);
+  const int total = LBL_ROWB * LBL_H;
+  static char buf[4096]; size_t n = 0;
+  auto flush = [&]() { bool ok = !n || printerWrite((const uint8_t *)buf, n); n = 0; return ok; };
+  auto put = [&](const char *s, size_t l) { while (l) { size_t k = min(l, sizeof buf - n); memcpy(buf + n, s, k); n += k; s += k; l -= k; if (n == sizeof buf && !flush()) return false; } return true; };
+  auto puts_ = [&](const String &s) { return put(s.c_str(), s.length()); };
+  if (cfgLang == "tspl") {
+    if (!puts_("SIZE 101.6 mm,152.4 mm\r\nGAP 3 mm,0 mm\r\nDIRECTION 0\r\nCLS\r\nBITMAP 0,0," + String(LBL_ROWB) + "," + String(LBL_H) + ",0,")) return false;
+    for (int i = 0; i < total; i++) { char c = (char)(~d.out[i]); if (!put(&c, 1)) return false; }  // TSPL: 0 = black
+    String tail = "\r\n";
+    if (text.length()) tail += "TEXT 430,330,\"5\",0,1,1,\"" + text + "\"\r\n";
+    tail += "PRINT 1,1\r\n";
+    return puts_(tail) && flush();
+  }
+  if (!puts_("^XA^PW" + String(LBL_W) + "^LL" + String(LBL_H) + "^FO0,0^GFA," + String(total) + "," + String(total) + "," + String(LBL_ROWB) + ",")) return false;
+  static const char HX[] = "0123456789ABCDEF";
+  for (int i = 0; i < total; i++) { char h2[2] = {HX[d.out[i] >> 4], HX[d.out[i] & 15]}; if (!put(h2, 2)) return false; }
+  String tail = "^FS";
+  if (text.length()) tail += "^FO430,330^A0N,64,64^FB360,2,0,R^FD" + text + "^FS";
+  tail += "^XZ";
+  return puts_(tail) && flush();
+}
+
+static bool isPng(const uint8_t *b, size_t n) { return n > 8 && b[0] == 0x89 && b[1] == 'P' && b[2] == 'N' && b[3] == 'G'; }
+
 void pollQueue() {
   if (cfgQueueUrl.isEmpty() || !printerReady || WiFi.status() != WL_CONNECTED) return;
   if (millis() - lastPoll < QUEUE_POLL_SECONDS * 1000UL) return;
@@ -397,14 +568,15 @@ void pollQueue() {
   WiFiClientSecure tls;
   tls.setInsecure();  // jobs are authenticated by the token; see README for pinning a CA
   HTTPClient http;
-  const char *hdrs[] = {"X-Job-Id"};
+  const char *hdrs[] = {"X-Job-Id", "X-Label-Text"};
   if (!http.begin(tls, cfgQueueUrl + "/next")) return;
-  http.collectHeaders(hdrs, 1);
+  http.collectHeaders(hdrs, 2);
+  http.addHeader("X-Bridge-Accepts", "image/png");
   http.addHeader("Authorization", "Bearer " + cfgQueueToken);
   int code = http.GET();
   if (code != 200) { http.end(); if (code != 204 && code > 0) logEvent("Queue: HTTP " + String(code)); return; }
 
-  String id = http.header("X-Job-Id");
+  String id = http.header("X-Job-Id"), labelText = http.header("X-Label-Text");
   int size = http.getSize();
   if (size <= 0 || size > MAX_JOB_BYTES) { http.end(); logEvent("Queue: job size not supported"); return; }
   uint8_t *job = (uint8_t *)ps_malloc(size);
@@ -416,7 +588,16 @@ void pollQueue() {
     if (n > 0) got += n; else delay(5);
   }
   http.end();
-  bool ok = (got == size) && printerWrite(job, size);
+  bool ok = false;
+  if (got == size && isPng(job, size)) {
+    PngDec d;
+    String err = decodePngLabel(job, size, d);
+    if (err.length()) logEvent("Queue: label picture " + id + ": " + err);
+    else ok = printLabelImage(d, labelText);
+    freePng(d);
+  } else {
+    ok = (got == size) && printerWrite(job, size);
+  }
   free(job);
   if (!ok) { logEvent("Queue: job " + id + " FAILED, will retry"); return; }
   jobsPrinted++;
@@ -672,6 +853,9 @@ void handleRoot() {
        "<label>Wi-Fi password</label><input name=pass type=password placeholder=\"(unchanged)\">"
        "<label>Print queue URL <small>(optional)</small></label><input name=qurl value=\"" + htmlEsc(cfgQueueUrl) + "\" placeholder=\"https://.../print\">"
        "<label>Queue token <small>(optional)</small></label><input name=qtok type=password placeholder=\"" + String(cfgQueueToken.length() ? "(unchanged)" : "") + "\">"
+       "<label>Printer language <small>(for shipping labels from the queue)</small></label><select name=lang style=\"width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;font:inherit\">"
+       "<option value=zpl" + String(cfgLang == "zpl" ? " selected" : "") + ">ZPL (Zebra, RONGTA, most 4x6 printers)</option>"
+       "<option value=tspl" + String(cfgLang == "tspl" ? " selected" : "") + ">TSPL (many budget label printers)</option></select>"
        "<button>Save and restart</button></form></div>";
   web.send(200, "text/html", h);
 }
@@ -682,6 +866,7 @@ void handleSave() {
   cfgQueueUrl = web.arg("qurl"); cfgQueueUrl.trim();
   while (cfgQueueUrl.endsWith("/")) cfgQueueUrl.remove(cfgQueueUrl.length() - 1);
   if (web.arg("qtok").length()) cfgQueueToken = web.arg("qtok");
+  if (web.arg("lang") == "tspl" || web.arg("lang") == "zpl") cfgLang = web.arg("lang");
   saveSettings();
   web.send(200, "text/html", String(FPSTR(PAGE_HEAD)) + "<div class=card>Saved. Restarting&hellip; Reconnect to your normal Wi-Fi and open <code>http://" BRIDGE_NAME ".local</code></div>");
   delay(1500);
