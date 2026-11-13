@@ -33,7 +33,7 @@
 #include "config.h"
 #include "improv_serial.h"       // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.9.1"
+#define FIRMWARE_VERSION "1.9.2"
 ImprovSerial improv(Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -397,6 +397,10 @@ void serviceRawPrinting() {
 // GET  <QUEUE_URL>/next  -> 204 when empty, or 200 with raw printer bytes and header X-Job-Id
 // POST <QUEUE_URL>/ack?id=<id>  after a job prints
 uint32_t lastPoll = 0;
+// Jobs printed recently. The queue's storage can keep saying "not done yet" for up to a
+// minute after we confirm a job, so the same job may be offered again: never print it twice.
+String recentJobs[16]; uint8_t recentNext = 0;
+static bool printedBefore(const String &id) { for (auto &j : recentJobs) if (j.length() && j == id) return true; return false; }
 
 // ---------------------------------------------------------------- picture labels
 // Queue jobs that are PNG pictures (e.g. Shippo shipping labels) are decoded here and sent to
@@ -567,6 +571,9 @@ void pollQueue() {
   if (code != 200) { http.end(); if (code != 204 && code > 0) logEvent("Queue: HTTP " + String(code)); return; }
 
   String id = http.header("X-Job-Id"), labelText = http.header("X-Label-Text");
+  bool repeat = id.length() && printedBefore(id);
+  if (repeat) http.end();
+  else {
   int size = http.getSize();
   if (size <= 0 || size > MAX_JOB_BYTES) { http.end(); logEvent("Queue: job size not supported"); return; }
   uint8_t *job = (uint8_t *)ps_malloc(size);
@@ -592,6 +599,8 @@ void pollQueue() {
   if (!ok) { logEvent("Queue: job " + id + " FAILED, will retry"); return; }
   jobsPrinted++;
   logEvent("Printed queued job " + id);
+  if (id.length()) { recentJobs[recentNext] = id; recentNext = (recentNext + 1) % 16; }
+  }
 
   HTTPClient ack;
   WiFiClientSecure tls2; tls2.setInsecure();
