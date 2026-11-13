@@ -33,7 +33,7 @@
 #include "config.h"
 #include "improv_serial.h"       // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.9.2"
+#define FIRMWARE_VERSION "1.9.3"
 ImprovSerial improv(Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -851,6 +851,7 @@ void handleRoot() {
        "<label>Wi-Fi name</label><input name=ssid value=\"" + htmlEsc(cfgSsid) + "\" required>"
        "<label>Wi-Fi password</label><input name=pass type=password placeholder=\"(unchanged)\">"
        "<label>Print queue URL <small>(optional)</small></label><input name=qurl value=\"" + htmlEsc(cfgQueueUrl) + "\" placeholder=\"https://.../print\">"
+       + (cfgQueueUrl.endsWith("/print") ? "<small><a href=\"" + htmlEsc(cfgQueueUrl.substring(0, cfgQueueUrl.length() - 6)) + "/admin\" target=_blank rel=noopener>Open the Label Autopilot settings page</a></small>" : String("")) +
        "<label>Queue token <small>(optional)</small></label><input name=qtok type=password placeholder=\"" + String(cfgQueueToken.length() ? "(unchanged)" : "") + "\">"
        "<label>Printer language <small>(for shipping labels from the queue)</small></label><select name=lang style=\"width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;font:inherit\">"
        "<option value=zpl" + String(cfgLang == "zpl" ? " selected" : "") + ">ZPL (Zebra, RONGTA, most 4x6 printers)</option>"
