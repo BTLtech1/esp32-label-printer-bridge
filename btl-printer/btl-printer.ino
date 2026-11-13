@@ -33,7 +33,7 @@
 #include "config.h"
 #include "improv_serial.h"       // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.9.3"
+#define FIRMWARE_VERSION "1.9.4"
 ImprovSerial improv(Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -566,6 +566,7 @@ void pollQueue() {
   if (!http.begin(tls, cfgQueueUrl + "/next")) return;
   http.collectHeaders(hdrs, 2);
   http.addHeader("X-Bridge-Accepts", "image/png");
+  http.addHeader("X-Bridge-Page", "http://" + WiFi.localIP().toString() + "/");  // lets the queue's settings page link back here
   http.addHeader("Authorization", "Bearer " + cfgQueueToken);
   int code = http.GET();
   if (code != 200) { http.end(); if (code != 204 && code > 0) logEvent("Queue: HTTP " + String(code)); return; }
