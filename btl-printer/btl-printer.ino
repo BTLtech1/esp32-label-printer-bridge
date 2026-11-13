@@ -33,7 +33,7 @@
 #include "config.h"
 #include "improv_serial.h"       // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.9.0"
+#define FIRMWARE_VERSION "1.9.1"
 ImprovSerial improv(Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -535,7 +535,7 @@ static bool printLabelImage(const PngDec &d, String text) {
     if (!puts_("SIZE 101.6 mm,152.4 mm\r\nGAP 3 mm,0 mm\r\nDIRECTION 0\r\nCLS\r\nBITMAP 0,0," + String(LBL_ROWB) + "," + String(LBL_H) + ",0,")) return false;
     for (int i = 0; i < total; i++) { char c = (char)(~d.out[i]); if (!put(&c, 1)) return false; }  // TSPL: 0 = black
     String tail = "\r\n";
-    if (text.length()) tail += "TEXT 430,330,\"5\",0,1,1,\"" + text + "\"\r\n";
+    if (text.length()) tail += "TEXT 430,390,\"5\",0,1,1,\"" + text + "\"\r\n";
     tail += "PRINT 1,1\r\n";
     return puts_(tail) && flush();
   }
@@ -543,7 +543,7 @@ static bool printLabelImage(const PngDec &d, String text) {
   static const char HX[] = "0123456789ABCDEF";
   for (int i = 0; i < total; i++) { char h2[2] = {HX[d.out[i] >> 4], HX[d.out[i] & 15]}; if (!put(h2, 2)) return false; }
   String tail = "^FS";
-  if (text.length()) tail += "^FO430,330^A0N,64,64^FB360,2,0,R^FD" + text + "^FS";
+  if (text.length()) tail += "^FO430,390^A0N,64,64^FB360,2,0,R^FD" + text + "^FS";
   tail += "^XZ";
   return puts_(tail) && flush();
 }
