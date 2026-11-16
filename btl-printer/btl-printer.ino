@@ -33,7 +33,7 @@
 #include "config.h"
 #include "improv_serial.h"       // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.9.4"
+#define FIRMWARE_VERSION "1.9.5"
 ImprovSerial improv(Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -400,6 +400,8 @@ uint32_t lastPoll = 0;
 // Jobs printed recently. The queue's storage can keep saying "not done yet" for up to a
 // minute after we confirm a job, so the same job may be offered again: never print it twice.
 String recentJobs[16]; uint8_t recentNext = 0;
+// The last label picture received, kept so it can be checked at /lastlabel.png if a print looks wrong.
+uint8_t *lastPng = nullptr; size_t lastPngLen = 0;
 static bool printedBefore(const String &id) { for (auto &j : recentJobs) if (j.length() && j == id) return true; return false; }
 
 // ---------------------------------------------------------------- picture labels
@@ -530,24 +532,42 @@ static String decodePngLabel(const uint8_t *png, size_t len, PngDec &d) {
 // Sends the decoded label to the printer in ZPL or TSPL, with the optional text on top.
 static bool printLabelImage(const PngDec &d, String text) {
   text.replace("^", ""); text.replace("~", ""); text.replace("\"", "'"); text = text.substring(0, 40);
-  const int total = LBL_ROWB * LBL_H;
   static char buf[4096]; size_t n = 0;
   auto flush = [&]() { bool ok = !n || printerWrite((const uint8_t *)buf, n); n = 0; return ok; };
   auto put = [&](const char *s, size_t l) { while (l) { size_t k = min(l, sizeof buf - n); memcpy(buf + n, s, k); n += k; s += k; l -= k; if (n == sizeof buf && !flush()) return false; } return true; };
   auto puts_ = [&](const String &s) { return put(s.c_str(), s.length()); };
+  // The picture is sent in bands of rows, skipping blank ones, with a short pause after each.
+  // One big image can overrun a cheap printer's input buffer: lost bytes shift the rest of the
+  // label sideways. Small bands keep each piece easy to digest and limit any damage to one band.
+  const int BAND = 32;
+  auto blank = [&](int y0, int rows) { for (int i = y0 * LBL_ROWB, e = (y0 + rows) * LBL_ROWB; i < e; i++) if (d.out[i]) return false; return true; };
   if (cfgLang == "tspl") {
-    if (!puts_("SIZE 101.6 mm,152.4 mm\r\nGAP 3 mm,0 mm\r\nDIRECTION 0\r\nCLS\r\nBITMAP 0,0," + String(LBL_ROWB) + "," + String(LBL_H) + ",0,")) return false;
-    for (int i = 0; i < total; i++) { char c = (char)(~d.out[i]); if (!put(&c, 1)) return false; }  // TSPL: 0 = black
-    String tail = "\r\n";
-    if (text.length()) tail += "TEXT 430,390,\"5\",0,1,1,\"" + text + "\"\r\n";
+    if (!puts_("SIZE 101.6 mm,152.4 mm\r\nGAP 3 mm,0 mm\r\nDIRECTION 0\r\nCLS\r\n")) return false;
+    for (int y0 = 0; y0 < LBL_H; y0 += BAND) {
+      int rows = min(BAND, LBL_H - y0);
+      if (blank(y0, rows)) continue;
+      if (!puts_("BITMAP 0," + String(y0) + "," + String(LBL_ROWB) + "," + String(rows) + ",0,")) return false;
+      for (int i = y0 * LBL_ROWB, e = (y0 + rows) * LBL_ROWB; i < e; i++) { char c = (char)(~d.out[i]); if (!put(&c, 1)) return false; }  // TSPL: 0 = black
+      if (!puts_("\r\n") || !flush()) return false;
+      delay(15);
+    }
+    String tail = "";
+    if (text.length()) tail += "TEXT 430,412,\"5\",0,1,1,\"" + text + "\"\r\n";
     tail += "PRINT 1,1\r\n";
     return puts_(tail) && flush();
   }
-  if (!puts_("^XA^PW" + String(LBL_W) + "^LL" + String(LBL_H) + "^FO0,0^GFA," + String(total) + "," + String(total) + "," + String(LBL_ROWB) + ",")) return false;
+  if (!puts_("^XA^PW" + String(LBL_W) + "^LL" + String(LBL_H) + "^LH0,0")) return false;
   static const char HX[] = "0123456789ABCDEF";
-  for (int i = 0; i < total; i++) { char h2[2] = {HX[d.out[i] >> 4], HX[d.out[i] & 15]}; if (!put(h2, 2)) return false; }
-  String tail = "^FS";
-  if (text.length()) tail += "^FO430,390^A0N,64,64^FB360,2,0,R^FD" + text + "^FS";
+  for (int y0 = 0; y0 < LBL_H; y0 += BAND) {
+    int rows = min(BAND, LBL_H - y0), bytes = rows * LBL_ROWB;
+    if (blank(y0, rows)) continue;
+    if (!puts_("^FO0," + String(y0) + "^GFA," + String(bytes) + "," + String(bytes) + "," + String(LBL_ROWB) + ",")) return false;
+    for (int i = y0 * LBL_ROWB, e = (y0 + rows) * LBL_ROWB; i < e; i++) { char h2[2] = {HX[d.out[i] >> 4], HX[d.out[i] & 15]}; if (!put(h2, 2)) return false; }
+    if (!puts_("^FS") || !flush()) return false;
+    delay(15);
+  }
+  String tail = "";
+  if (text.length()) tail += "^FO430,412^A0N,64,64^FB360,2,0,R^FD" + text + "^FS";
   tail += "^XZ";
   return puts_(tail) && flush();
 }
@@ -593,6 +613,7 @@ void pollQueue() {
     if (err.length()) logEvent("Queue: label picture " + id + ": " + err);
     else ok = printLabelImage(d, labelText);
     freePng(d);
+    free(lastPng); lastPng = job; lastPngLen = size; job = nullptr;
   } else {
     ok = (got == size) && printerWrite(job, size);
   }
@@ -1004,6 +1025,10 @@ void setup() {
   startWifi();
   web.on("/", handleRoot);
   web.on("/status", handleStatus);
+  web.on("/lastlabel.png", []() {
+    if (!lastPng) { web.send(404, "text/plain", "No label picture received since the bridge started."); return; }
+    web.send_P(200, "image/png", (const char *)lastPng, lastPngLen);
+  });
   web.on("/windows.ps1", handleWinScript);
   web.on("/save", HTTP_POST, handleSave);
   web.on("/test", HTTP_POST, handleTest);
