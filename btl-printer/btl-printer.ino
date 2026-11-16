@@ -33,7 +33,7 @@
 #include "config.h"
 #include "improv_serial.h"       // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.9.5"
+#define FIRMWARE_VERSION "1.9.6"
 ImprovSerial improv(Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -530,7 +530,15 @@ static String decodePngLabel(const uint8_t *png, size_t len, PngDec &d) {
 }
 
 // Sends the decoded label to the printer in ZPL or TSPL, with the optional text on top.
-static bool printLabelImage(const PngDec &d, String text) {
+// "note" (lines split by "|") is printed big down the label, e.g. a heads-up slip for an order
+// whose label wasn't bought.
+static bool printLabelImage(const PngDec &d, String text, String note) {
+  note.replace("^", ""); note.replace("~", ""); note.replace("\"", "'"); note = note.substring(0, 160);
+  String noteLines[8]; int nLines = 0;
+  for (int a = 0; note.length() && a <= (int)note.length() && nLines < 8; ) {
+    int b = note.indexOf('|', a); if (b < 0) b = note.length();
+    noteLines[nLines++] = note.substring(a, b); a = b + 1;
+  }
   text.replace("^", ""); text.replace("~", ""); text.replace("\"", "'"); text = text.substring(0, 40);
   static char buf[4096]; size_t n = 0;
   auto flush = [&]() { bool ok = !n || printerWrite((const uint8_t *)buf, n); n = 0; return ok; };
@@ -553,6 +561,7 @@ static bool printLabelImage(const PngDec &d, String text) {
     }
     String tail = "";
     if (text.length()) tail += "TEXT 430,412,\"5\",0,1,1,\"" + text + "\"\r\n";
+    for (int i = 0; i < nLines; i++) tail += "TEXT 30," + String(160 + i * 120) + ",\"5\",0,1,1,\"" + noteLines[i] + "\"\r\n";
     tail += "PRINT 1,1\r\n";
     return puts_(tail) && flush();
   }
@@ -568,6 +577,7 @@ static bool printLabelImage(const PngDec &d, String text) {
   }
   String tail = "";
   if (text.length()) tail += "^FO430,412^A0N,64,64^FB360,2,0,R^FD" + text + "^FS";
+  for (int i = 0; i < nLines; i++) tail += "^FO30," + String(160 + i * 120) + "^A0N," + String(i < 2 ? 96 : 72) + "," + String(i < 2 ? 96 : 72) + "^FD" + noteLines[i] + "^FS";
   tail += "^XZ";
   return puts_(tail) && flush();
 }
@@ -582,16 +592,16 @@ void pollQueue() {
   WiFiClientSecure tls;
   tls.setInsecure();  // jobs are authenticated by the token; see README for pinning a CA
   HTTPClient http;
-  const char *hdrs[] = {"X-Job-Id", "X-Label-Text"};
+  const char *hdrs[] = {"X-Job-Id", "X-Label-Text", "X-Label-Note"};
   if (!http.begin(tls, cfgQueueUrl + "/next")) return;
-  http.collectHeaders(hdrs, 2);
+  http.collectHeaders(hdrs, 3);
   http.addHeader("X-Bridge-Accepts", "image/png");
   http.addHeader("X-Bridge-Page", "http://" + WiFi.localIP().toString() + "/");  // lets the queue's settings page link back here
   http.addHeader("Authorization", "Bearer " + cfgQueueToken);
   int code = http.GET();
   if (code != 200) { http.end(); if (code != 204 && code > 0) logEvent("Queue: HTTP " + String(code)); return; }
 
-  String id = http.header("X-Job-Id"), labelText = http.header("X-Label-Text");
+  String id = http.header("X-Job-Id"), labelText = http.header("X-Label-Text"), labelNote = http.header("X-Label-Note");
   bool repeat = id.length() && printedBefore(id);
   if (repeat) http.end();
   else {
@@ -611,7 +621,7 @@ void pollQueue() {
     PngDec d;
     String err = decodePngLabel(job, size, d);
     if (err.length()) logEvent("Queue: label picture " + id + ": " + err);
-    else ok = printLabelImage(d, labelText);
+    else ok = printLabelImage(d, labelText, labelNote);
     freePng(d);
     free(lastPng); lastPng = job; lastPngLen = size; job = nullptr;
   } else {
