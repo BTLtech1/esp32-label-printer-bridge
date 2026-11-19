@@ -3,12 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Install BTL Print Bridge</title>
+<title>Install BTL Print Bridge: Wi-Fi for USB Label Printers</title>
+<meta name="description" content="Free firmware that turns a $6-10 ESP32-S3 board into a Wi-Fi bridge for USB thermal label printers. Install it from your browser in two minutes.">
+<link rel="canonical" href="https://btltech1.github.io/esp32-label-printer-bridge/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Install BTL Print Bridge: Wi-Fi for USB Label Printers">
+<meta property="og:description" content="Turn a USB thermal label printer into a Wi-Fi printer with a cheap ESP32-S3 board. Free, open source, installs from your browser.">
+<meta property="og:url" content="https://btltech1.github.io/esp32-label-printer-bridge/">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"BTL Print Bridge","applicationCategory":"UtilitiesApplication","operatingSystem":"ESP32-S3 firmware; prints from Windows, phones and web pages","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"url":"https://btltech1.github.io/esp32-label-printer-bridge/","downloadUrl":"https://github.com/BTLtech1/esp32-label-printer-bridge","author":{"@type":"Organization","name":"BTL","url":"https://btlstore.com"}}</script>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3CradialGradient id='g'%3E%3Cstop offset='0' stop-color='%23ffbf1f' stop-opacity='.7'/%3E%3Cstop offset='1' stop-color='%23ffbf1f' stop-opacity='0'/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='%2315171d'/%3E%3Ccircle cx='32' cy='32' r='24' fill='url(%23g)'/%3E%3Ccircle cx='32' cy='32' r='13' fill='%23ffbf1f'/%3E%3C/svg%3E">
 <meta name="theme-color" content="#15171d">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@500;700&family=Source+Sans+3:wght@400;500;600&family=Red+Hat+Mono:wght@500&display=swap">
 <script type="module" src="https://unpkg.com/esp-web-tools@10.1.1/dist/web/install-button.js?module"></script>
 <style>
   /* Colours and type match btlstore.com. The one flourish is the bokeh behind the title. */
@@ -16,9 +23,9 @@
     --bg:#f5f6f8; --surface:#fff; --ink:#15171d; --muted:#5a6070; --line:#dde1e8;
     --glow:#ffbf1f; --glow-soft:rgba(255,191,31,.22); --glow-ink:#8a5d00; --on-glow:#1b1400;
     --cool:#3f6fae; --led:#2fb35a;
-    --f-display:"Bricolage Grotesque","Avenir Next",system-ui,sans-serif;
-    --f-body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
-    --f-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
+    --f-display:"Schibsted Grotesk","Avenir Next",system-ui,sans-serif;
+    --f-body:"Source Sans 3",system-ui,-apple-system,"Segoe UI",sans-serif;
+    --f-mono:"Red Hat Mono",ui-monospace,"SF Mono",Menlo,monospace;
     /* installer pop-up (ESP Web Tools) */
     --mdc-theme-primary:#15171d; --mdc-theme-secondary:#ffbf1f;
     color-scheme:light;
@@ -268,7 +275,7 @@
 
 <footer><div class="wrap">
   <p>Source code and full guide: <a href="https://github.com/BTLtech1/esp32-label-printer-bridge">github.com/BTLtech1/esp32-label-printer-bridge</a></p>
-  <p>Made by <a href="https://btlstore.com">BTL</a> in Oregon.</p>
+  <p>Made by <a href="https://btlstore.com">BTL</a> in Oregon. New to this? Read the <a href="https://btlstore.com/guides/wireless-label-printer-bridge/">step-by-step guide</a>.</p>
 </div></footer>
 
 <script>
