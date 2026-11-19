@@ -218,6 +218,7 @@
         </esp-web-install-button>
       </div>
       <p class="muted"><b>Asked to "Erase device"?</b> First install: tick it. Updating a bridge you already set up: leave it unticked to keep your settings.</p>
+      <p class="muted"><b>"Failed to fetch"?</b> Your computer lost its internet for a moment, usually because it hopped onto the board's own <b>BTL-Printer-Setup</b> Wi-Fi. Reconnect to your normal Wi-Fi, then click Install again.</p>
       <p class="muted">Nothing shows up in the list? Try a different USB cable: many cables only charge and can't send data. Stuck on connecting? Hold the board's <b>BOOT</b> button while you click Install.</p>
     </li>
 
@@ -302,6 +303,19 @@
     }
     document.getElementById('bo').addEventListener('click', open);
     bn.addEventListener('keydown', function (e) { if (e.key === 'Enter') open(); });
+  })();
+  // Fetch the install files as soon as someone goes for the Install button, so they are already in the browser's
+  // cache when the installer asks for them. The board restarting can make the computer's Wi-Fi blip at that moment,
+  // and a file that is already cached survives that.
+  (function () {
+    var done = false, btn = document.querySelector('esp-web-install-button');
+    function warm() {
+      if (done) return; done = true;
+      fetch('manifest.json').then(function (r) { return r.json(); }).then(function (m) {
+        m.builds.forEach(function (b) { b.parts.forEach(function (p) { fetch(p.path).then(function (r) { return r.blob(); }); }); });
+      }).catch(function () { done = false; });
+    }
+    if (btn) ['pointerenter', 'pointerdown', 'focusin'].forEach(function (ev) { btn.addEventListener(ev, warm, true); });
   })();
 </script>
 </body>
