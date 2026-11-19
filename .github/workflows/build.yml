@@ -40,7 +40,15 @@ jobs:
       - name: Assemble install page
         run: |
           mkdir -p site/firmware
-          cp build/btl-printer.ino.merged.bin site/firmware/btl-print-bridge.bin
+          # The merged image is padded with blank (0xFF) bytes up to the full 16 MB flash size.
+          # Trim that blank tail so the browser downloads ~1.5 MB instead of 16 MB (same firmware, much faster and more reliable install).
+          python3 - <<'PY'
+          data = open('build/btl-printer.ino.merged.bin', 'rb').read().rstrip(b'\xff')
+          data += b'\xff' * (-len(data) % 4096)
+          open('site/firmware/btl-print-bridge.bin', 'wb').write(data)
+          print('install image:', len(data), 'bytes')
+          PY
+          ls -la site/firmware
           cp build/btl-printer.ino.bin site/firmware/btl-print-bridge-update.bin
           cp web/index.html site/index.html
           cp web/windows.txt site/windows.txt
