@@ -20,14 +20,14 @@ No app, no cloud account, no AI needed. Made by [BTL](https://btlstore.com).
 |---|---|
 | **ESP32-S3** dev board with **two USB-C ports** | Search "ESP32-S3 DevKitC N16R8". Must be an **S3**: the plain ESP32, C3 and C6 can't act as a USB host. N16R8 = 16 MB flash + 8 MB PSRAM. |
 | Adapter from your printer's USB port to USB-C | Most label printers have a square USB-B port: use a "USB-B male to USB-C female" adapter plus a USB-C to USB-C cable, or the printer's normal cable plus a "USB-C male to USB-A female" OTG adapter. |
-| USB-A to USB-C cable + any USB-A phone charger | Powers the board. A USB-C charger with a C-to-C cable often won't power the UART port (see Troubleshooting). |
+| USB-A to USB-C cable + any USB-A phone charger | Powers the board. A USB-C charger with a C-to-C cable often won't power the COM port (see Troubleshooting). |
 | Your label printer and its power supply | The printer must have its own power (the board doesn't power it). |
 
-**Wiring:** printer → adapter → the board's port labeled **USB** (sometimes "OTG"). Power the board from its other port, labeled **UART** or "COM".
+**Wiring:** printer → adapter → the board's port labeled **USB** (sometimes "OTG"). Power the board from its other port, labeled **COM** (sometimes "UART").
 
 ## Easiest: install from your browser
 
-Open **https://btltech1.github.io/esp32-label-printer-bridge** in Chrome or Edge, plug in the board's UART port, and click **Install**. Not sure which port is the board? Unplug it and click Install again: the entry that disappears is the board.
+Open **https://btltech1.github.io/esp32-label-printer-bridge** in Chrome or Edge, plug in the board's COM port, and click **Install**. Not sure which port is the board? Unplug it and click Install again: the entry that disappears is the board.
 
 ## Flash the firmware with Arduino IDE (one time, about 15 minutes)
 
@@ -36,7 +36,7 @@ Open **https://btltech1.github.io/esp32-label-printer-bridge** in Chrome or Edge
    `https://espressif.github.io/arduino-esp32/package_esp32_index.json`
 3. **Tools → Board → Boards Manager**, search **esp32** by Espressif, install version **3.x**.
 4. Open `btl-printer/btl-printer.ino` from this folder.
-5. Plug the board's **UART** port into your computer and set **Tools**:
+5. Plug the board's **COM** port into your computer and set **Tools**:
    - Board: **ESP32S3 Dev Module**
    - USB CDC On Boot: **Disabled**
    - USB Mode: **Hardware CDC and JTAG**
@@ -123,8 +123,8 @@ Want one button per flier? Wire any momentary push button (arcade buttons, big d
 
 | Problem | Fix |
 |---|---|
-| Board doesn't light up on the **UART/COM** port with a USB-C charger (but does on the other port) | Many cheap boards lack the resistors USB-C chargers look for on that port. Power it with a **USB-A to USB-C** cable from an ordinary USB-A charger or computer port instead. |
-| Page says **printer not connected** | Check the printer is on and plugged into the **USB** port (not UART). If the last event never mentions "USB:", the printer is probably waiting for 5 V: see "5 V on the USB port" below. |
+| Board doesn't light up on the **COM/UART** port with a USB-C charger (but does on the other port) | Many cheap boards lack the resistors USB-C chargers look for on that port. Power it with a **USB-A to USB-C** cable from an ordinary USB-A charger or computer port instead. |
+| Page says **printer not connected** | Check the printer is on and plugged into the **USB** port (not COM). If the last event never mentions "USB:", the printer is probably waiting for 5 V: see "5 V on the USB port" below. |
 | Windows can't find the printer | Make sure your computer and the bridge are on the same network. Use the IP address instead of the `.local` name. |
 | Prints blank, garbage, or tiny | That's the driver, not the bridge. Use the same driver and settings that work over a USB cable. |
 | Bridge can't join Wi-Fi | It needs a 2.4 GHz network. If it fails, it goes back to setup mode (BTL-Printer-Setup). |

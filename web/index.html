@@ -168,12 +168,12 @@
   <section class="ports-panel" aria-labelledby="ports-h">
     <h2 id="ports-h">Which port is which?</h2>
     <p>The board has two USB-C ports. It matters which one you use.</p>
-    <svg class="ports" viewBox="0 0 560 400" role="img" aria-label="The UART/COM port connects to your computer or a charger for power and installing. The USB port connects to the label printer.">
+    <svg class="ports" viewBox="0 0 560 400" role="img" aria-label="The COM/UART port connects to your computer or a charger for power and installing. The USB port connects to the label printer.">
       <rect x="180" y="10" width="200" height="150" rx="12" class="pcb"/>
       <rect x="215" y="28" width="130" height="74" rx="6" class="chip"/>
       <text x="280" y="72" class="chiptxt">ESP32-S3</text>
       <text x="230" y="135" class="portlbl usb">USB</text>
-      <text x="330" y="135" class="portlbl uart">UART</text>
+      <text x="330" y="135" class="portlbl uart">COM</text>
       <rect x="205" y="148" width="50" height="24" rx="8" class="port usbfill"/>
       <rect x="305" y="148" width="50" height="24" rx="8" class="port uartfill"/>
       <path d="M230 172 C230 215 110 200 110 220" class="cable usbline"/>
@@ -187,17 +187,17 @@
       <text x="110" y="332" class="cap usb" text-anchor="middle">USB port</text>
       <text x="110" y="359" class="sub" text-anchor="middle">Label printer</text>
       <text x="110" y="385" class="sub" text-anchor="middle">&#10060; Not for installing</text>
-      <text x="442" y="332" class="cap uart" text-anchor="middle">UART / COM port</text>
+      <text x="442" y="332" class="cap uart" text-anchor="middle">COM / UART port</text>
       <text x="442" y="359" class="sub" text-anchor="middle">Computer or charger</text>
       <text x="442" y="385" class="sub" text-anchor="middle">&#9989; Install &amp; update here</text>
     </svg>
-    <p class="muted"><b>UART/COM is for power and setup, USB is for the printer.</b> Once the bridge is running, the USB port only talks to the printer and won't show up on your computer, so always install and update through UART/COM.</p>
+    <p class="muted"><b>COM/UART is for power and setup, USB is for the printer.</b> Once the bridge is running, the USB port only talks to the printer and won't show up on your computer, so always install and update through COM/UART.</p>
   </section>
 
   <ol class="steps">
     <li class="step">
       <h2>Plug in the board</h2>
-      <p>Use a USB-C cable to plug the board into this computer. Use the port on the board marked <b>UART</b> (or <b>COM</b>).</p>
+      <p>Use a USB-C cable to plug the board into this computer. Use the port on the board marked <b>COM</b> (or <b>UART</b>).</p>
       <p class="muted">Board doesn't light up later on a USB-C phone charger? Many boards need a <b>USB-A to USB-C</b> cable on this port. Your computer works either way.</p>
     </li>
 
@@ -235,7 +235,7 @@
       <h2>Plug in your printer</h2>
       <p>Plug your label printer into the board's other port, marked <b>USB</b>, and turn the printer on. The light on the board turns <b>green</b> when the printer is ready. (Red = no printer yet, purple = not on your Wi-Fi yet.)</p>
       <details><summary>Light stays red?</summary>
-        <p>Check the printer is on and plugged into <b>USB</b>, not UART. Many printers also wait for 5&nbsp;V on the cable, which these boards don't send by default. The fix is a dab of solder (or conductive pen) across the two tiny pads marked <b>USB-OTG</b> on the board, or a small USB-C OTG adapter with a charger plugged into it. USB hubs and docks don't work. <a href="https://github.com/BTLtech1/esp32-label-printer-bridge#troubleshooting">More help</a>.</p>
+        <p>Check the printer is on and plugged into <b>USB</b>, not COM. Many printers also wait for 5&nbsp;V on the cable, which these boards don't send by default. The fix is a dab of solder (or conductive pen) across the two tiny pads marked <b>USB-OTG</b> on the board, or a small USB-C OTG adapter with a charger plugged into it. USB hubs and docks don't work. <a href="https://github.com/BTLtech1/esp32-label-printer-bridge#troubleshooting">More help</a>.</p>
       </details>
     </li>
 
