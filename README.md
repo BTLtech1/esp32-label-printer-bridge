@@ -97,7 +97,7 @@ Open the bridge's page. The **Firmware** box says whether a newer version exists
 
 Store up to 5 print jobs on the bridge and print them with the board's **BOOT** button, no computer needed.
 
-1. Open the bridge's page (**Open my bridge** in Step 6 of the [install page](https://btltech1.github.io/esp32-label-printer-bridge), or the desktop shortcut if you made one). Under **Saved fliers**, pick a flier, open **Change this flier** and click **Save next print here**.
+1. Open the bridge's page (**Open my bridge** in Step 6 of the [install page](https://btltech1.github.io/esp32-label-printer-bridge), or the desktop shortcut if you made one). Under **Saved fliers**, pick a flier and click **Save next print here**.
 2. Within 5 minutes, print your flier from your computer to the bridge's printer as usual. The bridge saves it instead of printing it.
 3. Print it with the **BOOT** button:
    - **1 to 5 quick clicks** print Flier 1 to 5 (1 copy).

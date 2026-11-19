@@ -853,7 +853,7 @@ void handleRoot() {
          "<form method=post action=/test style=\"display:inline\"><button>Print ZPL test</button></form> "
          "<form method=post action=/test-tspl style=\"display:inline\"><button>Print TSPL test</button></form></div>";
     h += FPSTR(TEXT_TOOL);
-    h += "<div class=card><b>Saved fliers</b><br><small>To save one: open <b>Change this flier</b>, click <b>Save next print here</b>, then print the flier from your computer to this printer "
+    h += "<div class=card><b>Saved fliers</b><br><small>To save one: click <b>Save next print here</b> under the flier you want, then print the flier from your computer to this printer "
          "within " + String(CAPTURE_MINUTES) + " minutes. It's stored instead of printed.<br>"
          "To print it: click the board's <b>BOOT</b> button 1 to " + String(FLIER_COUNT) + " times quickly for Flier 1 to " + String(FLIER_COUNT) + ". "
          "Hold the last click for 2 seconds to print the batch, and press again to stop.<br>"
@@ -870,11 +870,10 @@ void handleRoot() {
            "<div style=\"display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px\"><small>Batch (hold the last click):</small>"
            "<input name=batch type=number min=1 max=999 value=" + String(flierBatch[n]) + " style=\"width:80px\" aria-label=\"Copies when you hold the button\">"
            "<small>copies</small><button name=do value=rename style=\"margin:0;background:#666\">Save</button></div>"
-           "<details style=margin-top:6px><summary style=cursor:pointer><small>Change this flier</small></summary>"
            "<label>Name</label><input name=name maxlength=30 placeholder=\"e.g. Menu\" value=\"" + htmlEsc(flierName[n]) + "\">"
            "<button name=do value=rename style=\"background:#666\">Save name</button> "
            "<button name=do value=save style=\"background:#2563c9\">Save next print here</button> "
-           "<button name=do value=delete style=\"background:#999\"" + dis + ">Delete flier</button></details></form>";
+           "<button name=do value=delete style=\"background:#999\"" + dis + ">Delete flier</button></form>";
     }
     h += "</div>";
   }
