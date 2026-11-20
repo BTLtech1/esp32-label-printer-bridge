@@ -52,7 +52,7 @@ jobs:
           cp build/btl-printer.ino.bin site/firmware/btl-print-bridge-update.bin
           cp web/index.html site/index.html
           cp web/windows.txt site/windows.txt
-          FW=$(grep -oP 'FIRMWARE_VERSION "\K[^"]+' btl-printer/btl-printer.ino)
+          FW=$(grep -oP '^#define FIRMWARE_VERSION "\K[^"]+' btl-printer/btl-printer.ino | head -1)
           echo "{\"version\":\"$FW\"}" > site/version.json
           cat site/version.json
           VERSION="$(date -u +%Y.%m.%d)-${GITHUB_SHA::7}"
