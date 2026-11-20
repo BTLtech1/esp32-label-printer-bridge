@@ -23,6 +23,7 @@
 #include <WiFiClientSecure.h>
 #include <FFat.h>
 #include <Update.h>
+#include "esp_system.h"
 #include "usb/usb_host.h"
 #include "png_label.h"
 #if __has_include("esp32s3/rom/miniz.h")
@@ -33,7 +34,7 @@
 #include "config.h"
 #include "improv_serial.h"       // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.9.6"
+#define FIRMWARE_VERSION "1.10.0"
 ImprovSerial improv(Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -90,9 +91,53 @@ String lastEvent = "Starting";
 String hostName;  // e.g. "btl-printer-3fa2": unique per board, so several bridges can share one network
 
 
+// ---------------------------------------------------------------- troubleshooting log
+// The last LOG_LINES events, kept in memory (cleared by a restart) and shown on the page so
+// people can copy them into a bug report. Never holds the Wi-Fi name or password, the queue
+// URL or token, or the contents of any print job: only what happened, when, and how big.
+#define LOG_LINES 80
+#define LOG_CHARS 100
+static char logText[LOG_LINES][LOG_CHARS];
+static uint32_t logAt[LOG_LINES];
+static uint16_t logNext = 0, logCount = 0;
+static portMUX_TYPE logMux = portMUX_INITIALIZER_UNLOCKED;
+
+// Adds a line to the log only (safe to call from any task).
+void logNote(const char *s) {
+  portENTER_CRITICAL(&logMux);
+  strlcpy(logText[logNext], s, LOG_CHARS);
+  logAt[logNext] = millis();
+  logNext = (logNext + 1) % LOG_LINES;
+  if (logCount < LOG_LINES) logCount++;
+  portEXIT_CRITICAL(&logMux);
+}
+
+// Adds a line to the log and shows it as "Last event" on the page.
 void logEvent(const String &s) {
   lastEvent = s;
   Serial.println(s);
+  String t = s;
+  if (cfgSsid.length()) t.replace(cfgSsid, "(Wi-Fi name)");
+  logNote(t.c_str());
+}
+
+static String upTime(uint32_t ms) {
+  uint32_t sec = ms / 1000; char b[24];
+  if (sec >= 86400) snprintf(b, sizeof b, "%ud %02u:%02u:%02u", (unsigned)(sec / 86400), (unsigned)(sec / 3600 % 24), (unsigned)(sec / 60 % 60), (unsigned)(sec % 60));
+  else snprintf(b, sizeof b, "%02u:%02u:%02u", (unsigned)(sec / 3600), (unsigned)(sec / 60 % 60), (unsigned)(sec % 60));
+  return b;
+}
+
+static const char *restartReason() {
+  switch (esp_reset_reason()) {
+    case ESP_RST_POWERON: return "power was plugged in";
+    case ESP_RST_SW: return "restarted itself (settings saved, update, or install)";
+    case ESP_RST_PANIC: return "CRASH";
+    case ESP_RST_INT_WDT: case ESP_RST_TASK_WDT: case ESP_RST_WDT: return "FROZE and was restarted (watchdog)";
+    case ESP_RST_BROWNOUT: return "POWER DIP (weak USB power or cable)";
+    case ESP_RST_EXT: return "reset button";
+    default: return "other";
+  }
 }
 
 // ---------------------------------------------------------------- USB host (printer)
@@ -240,9 +285,10 @@ bool printerWrite(const uint8_t *data, size_t len) {
     xfer->callback = xferCb;
     xfer->context = nullptr;
     xfer->timeout_ms = 10000;
-    if (usb_host_transfer_submit(xfer) != ESP_OK) { ok = false; break; }
-    if (xSemaphoreTake(xferDone, pdMS_TO_TICKS(15000)) != pdTRUE) { ok = false; break; }
+    if (usb_host_transfer_submit(xfer) != ESP_OK) { ok = false; logNote("USB: printer refused the data (submit failed)"); break; }
+    if (xSemaphoreTake(xferDone, pdMS_TO_TICKS(15000)) != pdTRUE) { ok = false; logNote("USB: printer stopped answering (15 s timeout)"); break; }
     ok = xferOk;
+    if (!ok) logNote("USB: printer rejected the data (transfer error)");
     data += n; len -= n;
   }
   xSemaphoreGive(usbLock);
@@ -599,6 +645,9 @@ void pollQueue() {
   http.addHeader("X-Bridge-Page", "http://" + WiFi.localIP().toString() + "/");  // lets the queue's settings page link back here
   http.addHeader("Authorization", "Bearer " + cfgQueueToken);
   int code = http.GET();
+  static bool queueDown = false;
+  if (code <= 0) { if (!queueDown) { queueDown = true; logNote(("Queue: couldn't reach the server (" + String(code) + ")").c_str()); } }
+  else if (queueDown) { queueDown = false; logNote("Queue: server reachable again"); }
   if (code != 200) { http.end(); if (code != 204 && code > 0) logEvent("Queue: HTTP " + String(code)); return; }
 
   String id = http.header("X-Job-Id"), labelText = http.header("X-Label-Text"), labelNote = http.header("X-Label-Note");
@@ -697,6 +746,19 @@ fetch('/raw',{method:'POST',body:f}).then(function(r){return r.text()}).then(fun
 
 // "Firmware" card: the browser checks GitHub for a newer version, downloads it over HTTPS and
 // uploads it to /update. A .bin file can also be uploaded by hand.
+const char LOG_TOOL[] PROGMEM = R"HTML(<div class=card><b>Troubleshooting log</b><br><small>Something not working? Click <b>Copy log</b> and paste it into your message when you ask for help.
+It has no passwords, no Wi-Fi name and nothing from your labels. It starts fresh each time the board restarts, so copy it before unplugging.</small><br>
+<button id=lc type=button>Copy log</button> <button id=lr type=button style="background:#666">Refresh</button> <small id=lm></small>
+<textarea id=lt readonly rows=10 wrap=off style="width:100%;box-sizing:border-box;margin-top:10px;padding:8px;border:1px solid #ccc;border-radius:8px;font:12px ui-monospace,Consolas,monospace;white-space:pre"></textarea></div>
+<script>(function(){
+var $=function(i){return document.getElementById(i)},t=$('lt'),m=$('lm');
+function load(){return fetch('/log').then(function(r){return r.text()}).then(function(x){t.value=x;t.scrollTop=t.scrollHeight})}
+$('lr').onclick=function(){load().then(function(){m.textContent='Updated.'}).catch(function(){m.textContent="Couldn't load the log."})};
+$('lc').onclick=function(){load().catch(function(){}).then(function(){t.focus();t.select();var ok=false;try{ok=document.execCommand('copy')}catch(e){}
+m.textContent=ok?'Copied. Paste it into your message.':'Select the text below and press Ctrl+C.'})};
+load().catch(function(){});
+})();</script>)HTML";
+
 const char FW_TOOL[] PROGMEM = R"HTML(<div class=card><b>Firmware</b> <small>version %VER%</small><br><span id=uv><small>Checking for updates&hellip;</small></span>
 <details style=margin-top:8px><summary style=cursor:pointer><small>Update from a file</small></summary><input id=uf type=file accept=.bin style=margin-top:8px><button id=ub type=button>Install file</button></details></div>
 <script>(function(){
@@ -832,6 +894,35 @@ String statusHtml() {
 
 void handleStatus() { web.send(200, "text/html", statusHtml()); }
 
+// Plain text made for pasting into a bug report.
+void handleLog() {
+  String t = "BTL Print Bridge log\n";
+  t += "Version: " FIRMWARE_VERSION "\n";
+  t += "Running for: " + upTime(millis()) + "\n";
+  t += String("Last restart: ") + restartReason() + "\n";
+  char ids[12]; snprintf(ids, sizeof ids, "%04x:%04x", usbVid, usbPid);
+  t += "Printer: " + (printerReady ? printerName + (printerModel.length() ? " / " + printerModel : String("")) + " (USB " + ids + ")" : String("not connected")) + "\n";
+  t += "Wi-Fi: " + (setupMode ? String("setup mode") : WiFi.status() == WL_CONNECTED ? "connected, signal " + String(WiFi.RSSI()) + " dBm" : String("NOT connected")) + "\n";
+  t += "Queue: " + (cfgQueueUrl.length() ? "on, " + cfgLang : String("off")) + "\n";
+  t += "Jobs printed: " + String(jobsPrinted) + "\n";
+  t += "Memory free: " + String(ESP.getFreeHeap() / 1024) + " KB (lowest " + String(ESP.getMinFreeHeap() / 1024) + " KB)\n";
+  t += "Storage: " + (fsReady ? String(FFat.freeBytes() / 1024) + " KB free of " + String(FFat.totalBytes() / 1024) + " KB" : String("not available")) + "\n";
+  t += "Fliers:";
+  for (int n = 1; n <= FLIER_COUNT; n++) { size_t z = flierSize(n); t += " " + String(n) + "=" + (z ? String(z / 1024 + 1) + "KB" : String("empty")); }
+  t += "\n\nTime since start, then what happened (newest last):\n";
+  static char line[LOG_CHARS]; uint32_t at = 0;
+  for (uint16_t i = 0;; i++) {
+    portENTER_CRITICAL(&logMux);
+    bool more = i < logCount;
+    if (more) { uint16_t k = (logNext + LOG_LINES - logCount + i) % LOG_LINES; memcpy(line, logText[k], LOG_CHARS); at = logAt[k]; }
+    portEXIT_CRITICAL(&logMux);
+    if (!more) break;
+    t += upTime(at) + "  " + line + "\n";
+  }
+  web.sendHeader("Cache-Control", "no-store");
+  web.send(200, "text/plain; charset=utf-8", t);
+}
+
 void handleRoot() {
   String h = FPSTR(PAGE_HEAD);
   h += "<div class=card id=st>" + statusHtml() + "</div>"
@@ -888,6 +979,7 @@ void handleRoot() {
        "<option value=zpl" + String(cfgLang == "zpl" ? " selected" : "") + ">ZPL (Zebra, RONGTA, most 4x6 printers)</option>"
        "<option value=tspl" + String(cfgLang == "tspl" ? " selected" : "") + ">TSPL (many budget label printers)</option></select>"
        "<button>Save and restart</button></form></div>";
+  h += FPSTR(LOG_TOOL);
   web.send(200, "text/html", h);
 }
 
@@ -1024,6 +1116,14 @@ void setup() {
   xferDone = xSemaphoreCreateBinary();
   usbLock = xSemaphoreCreateMutex();
   loadSettings();
+  logNote((String("Started, version " FIRMWARE_VERSION ". Last restart: ") + restartReason()).c_str());
+  WiFi.onEvent([](WiFiEvent_t e, WiFiEventInfo_t info) {
+    static bool up = false;
+    if (e == ARDUINO_EVENT_WIFI_STA_GOT_IP) { if (!up) logNote("Wi-Fi: online"); up = true; }
+    else if (e == ARDUINO_EVENT_WIFI_STA_DISCONNECTED && up) {
+      up = false; char b[48]; snprintf(b, sizeof b, "Wi-Fi: dropped (reason %d)", (int)info.wifi_sta_disconnected.reason); logNote(b);
+    }
+  });
   fsReady = FFat.begin(true);  // formats the storage area the first time
   { Preferences p; p.begin("btl", true); for (int n = 1; n <= FLIER_COUNT; n++) { flierName[n] = p.getString(("f" + String(n)).c_str(), ""); flierBatch[n] = p.getInt(("b" + String(n)).c_str(), 10); } p.end(); }
   pinMode(0, INPUT_PULLUP);
@@ -1034,6 +1134,7 @@ void setup() {
   startWifi();
   web.on("/", handleRoot);
   web.on("/status", handleStatus);
+  web.on("/log", handleLog);
   web.on("/lastlabel.png", []() {
     if (!lastPng) { web.send(404, "text/plain", "No label picture received since the bridge started."); return; }
     web.send_P(200, "image/png", (const char *)lastPng, lastPngLen);

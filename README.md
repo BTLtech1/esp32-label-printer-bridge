@@ -121,6 +121,8 @@ Want one button per flier? Wire any momentary push button (arcade buttons, big d
 
 ## Troubleshooting
 
+**Asking for help?** Open the bridge's page, scroll to **Troubleshooting log**, click **Copy log** and paste it into your message or GitHub issue. It lists what the board did since it last started (printer plugged in, each print job and whether it worked, Wi-Fi drops, why it last restarted). It has no passwords, no Wi-Fi name and nothing from your labels. It clears when the board restarts, so copy it before unplugging.
+
 | Problem | Fix |
 |---|---|
 | Board doesn't light up on the **COM/UART** port with a USB-C charger (but does on the other port) | Many cheap boards lack the resistors USB-C chargers look for on that port. Power it with a **USB-A to USB-C** cable from an ordinary USB-A charger or computer port instead. |
