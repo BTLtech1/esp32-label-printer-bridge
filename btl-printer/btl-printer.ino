@@ -34,7 +34,7 @@
 #include "config.h"
 #include "improv_serial.h"       // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.10.1"
+#define FIRMWARE_VERSION "1.11.0"
 ImprovSerial improv(Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -746,6 +746,57 @@ fetch('/raw',{method:'POST',body:f}).then(function(r){return r.text()}).then(fun
 
 // "Firmware" card: the browser checks GitHub for a newer version, downloads it over HTTPS and
 // uploads it to /update. A .bin file can also be uploaded by hand.
+// "Copy or back up fliers" card. The browser does the work: it reads each flier from this board
+// (/flier-file) and posts it to another board's /flier-put, or packs them into one backup file.
+const char COPY_TOOL[] PROGMEM = R"HTML(<div class=card><b>Copy or back up fliers</b><br>
+<small>Copies go into the same click slots and replace what's there. Fliers only print correctly on the same kind of printer they were saved for.</small>
+<label>Send all fliers to another board</label>
+<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><select id=cb style="flex:1;min-width:180px;padding:10px;border:1px solid #ccc;border-radius:8px;font:inherit"><option value="">Searching&hellip;</option></select>
+<button id=cf type=button style="margin:0;background:#666">Search again</button></div>
+<input id=ca placeholder="or type its address, e.g. 192.168.1.50" style="margin-top:8px" aria-label="Other board's address">
+<button id=cs type=button>Send fliers</button> <small id=cm></small>
+<label style="margin-top:16px">Backup file</label>
+<small>Save all fliers to one file on this computer, or load a saved file onto this board.</small><br>
+<button id=bd type=button style="background:#666">Download backup</button> <button id=br type=button style="background:#666">Restore backup</button>
+<input id=bf type=file accept=".btlfliers" hidden> <small id=bm></small></div>
+<script>(function(){
+var $=function(i){return document.getElementById(i)},MAGIC='BTLFLIERS1';
+function list(){return fetch('/fliers.json',{cache:'no-store'}).then(function(r){return r.json()})}
+function get(n){return fetch('/flier-file?n='+n,{cache:'no-store'}).then(function(r){if(!r.ok)throw 'could not read flier '+n;return r.blob()})}
+function put(base,f,blob){var d=new FormData();d.append('n',f.n);d.append('name',f.name||'');d.append('batch',f.batch||10);d.append('f',blob,'flier.bin');
+return fetch(base+'/flier-put',{method:'POST',body:d}).then(function(r){return r.text().then(function(t){if(t!=='ok')throw(r.status==400?t:'that board needs its firmware updated first')})})}
+function each(a,fn){return a.reduce(function(p,x,i){return p.then(function(){return fn(x,i)})},Promise.resolve())}
+function say(m,e){return function(x){m.textContent=typeof x=='string'?x:(e||'Something went wrong.')}}
+function find(){var s=$('cb');s.innerHTML='<option value="">Searching&hellip;</option>';
+fetch('/boards',{cache:'no-store'}).then(function(r){return r.json()}).then(function(b){s.innerHTML=b.length?'':'<option value="">No other boards found</option>';
+b.forEach(function(x){var o=document.createElement('option');o.value=x.ip;o.textContent=x.name+' ('+x.ip+')';s.appendChild(o)})}).catch(function(){s.innerHTML='<option value="">Search failed</option>'})}
+$('cf').onclick=find;find();
+$('cs').onclick=function(){var m=$('cm'),t=($('ca').value.trim()||$('cb').value).replace(/^https?:\/\//,'').replace(/\/+$/,'');
+if(!t){m.textContent='Pick a board or type its address first.';return}
+if(t==location.host){m.textContent="That's this board.";return}
+var base='http://'+t,fl,btn=this;
+list().then(function(j){fl=j.fliers;if(!fl.length)throw 'No fliers saved on this board yet.';
+return fetch(base+'/fliers.json',{cache:'no-store'}).then(function(r){return r.json()}).catch(function(){throw "Couldn't reach that board. Is it on, on the same Wi-Fi, and updated?"})})
+.then(function(o){if(!confirm('Send '+fl.length+' flier(s) to '+(o.board||t)+'? Fliers in the same slots on that board are replaced.'))throw 'Cancelled.';
+btn.disabled=true;return each(fl,function(f,i){m.textContent='Sending '+(i+1)+' of '+fl.length+'...';return get(f.n).then(function(b){return put(base,f,b)})})})
+.then(function(){m.textContent='Done. Sent '+fl.length+' flier(s).'}).catch(say(m,"Sending failed. Check the other board is on and try again.")).then(function(){btn.disabled=false})};
+$('bd').onclick=function(){var m=$('bm'),meta,parts=[];
+list().then(function(j){meta=j;if(!j.fliers.length)throw 'No fliers saved on this board yet.';m.textContent='Reading fliers...';
+return each(j.fliers,function(f){return get(f.n).then(function(b){f.size=b.size;parts.push(b)})})})
+.then(function(){var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([MAGIC+'\n',JSON.stringify(meta)+'\n'].concat(parts)));
+a.download=(meta.board||'btl')+'-fliers.btlfliers';document.body.appendChild(a);a.click();a.remove();m.textContent='Saved '+meta.fliers.length+' flier(s) to your Downloads.'}).catch(say(m,'Backup failed.'))};
+$('br').onclick=function(){$('bf').value='';$('bf').click()};
+$('bf').onchange=function(){var file=this.files[0],m=$('bm');if(!file)return;
+file.arrayBuffer().then(function(buf){var u=new Uint8Array(buf),a=u.indexOf(10),b=u.indexOf(10,a+1),dec=new TextDecoder();
+if(a<0||b<0||dec.decode(u.subarray(0,a))!==MAGIC)throw "That isn't a BTL flier backup file.";
+var meta=JSON.parse(dec.decode(u.subarray(a+1,b))),at=b+1,fl=meta.fliers;
+fl.forEach(function(f){f.blob=new Blob([u.subarray(at,at+f.size)]);at+=f.size});
+if(at!==u.length)throw 'That backup file is damaged.';
+if(!confirm('Load '+fl.length+' flier(s) onto this board? Fliers in the same slots are replaced.'))throw 'Cancelled.';
+return each(fl,function(f,i){m.textContent='Loading '+(i+1)+' of '+fl.length+'...';return put('',f,f.blob)}).then(function(){m.textContent='Done. Reloading...';setTimeout(function(){location.reload()},800)})})
+.catch(say(m,"Couldn't load that file."))};
+})();</script>)HTML";
+
 const char LOG_TOOL[] PROGMEM = R"HTML(<div class=card><b>Troubleshooting log</b><br><small>Something not working? Click <b>Copy log</b> and paste it into your message when you ask for help.
 It has no passwords, no Wi-Fi name and nothing from your labels. It starts fresh each time the board restarts, so copy it before unplugging.</small><br>
 <button id=lc type=button>Copy log</button> <button id=lr type=button style="background:#666">Refresh</button> <small id=lm></small>
@@ -902,6 +953,81 @@ String moveOptions(int n) {
   return o;
 }
 
+// ---- copying fliers to another board, and backup files (driven by the page's COPY_TOOL script)
+static String jsonEsc(const String &s) {
+  String o;
+  for (size_t i = 0; i < s.length(); i++) { char c = s[i]; if (c == '"' || c == '\\') { o += '\\'; o += c; } else if ((uint8_t)c >= 0x20) o += c; }
+  return o;
+}
+
+// Which fliers this board holds. Readable from another board's page, so it can check before sending.
+void handleFliersJson() {
+  String j = "{\"board\":\"" + hostName + "\",\"version\":\"" FIRMWARE_VERSION "\",\"fliers\":[";
+  bool first = true;
+  for (int n = 1; n <= FLIER_COUNT; n++) {
+    size_t z = flierSize(n);
+    if (!z) continue;
+    j += String(first ? "" : ",") + "{\"n\":" + String(n) + ",\"batch\":" + String(flierBatch[n]) + ",\"size\":" + String(z) + ",\"name\":\"" + jsonEsc(flierName[n]) + "\"}";
+    first = false;
+  }
+  j += "]}";
+  web.sendHeader("Access-Control-Allow-Origin", "*");
+  web.sendHeader("Cache-Control", "no-store");
+  web.send(200, "application/json", j);
+}
+
+// One saved flier's raw print data.
+void handleFlierFile() {
+  int n = web.arg("n").toInt();
+  if (n < 1 || n > FLIER_COUNT || !flierSize(n)) { web.send(404, "text/plain", "No flier in that slot."); return; }
+  File f = FFat.open(flierPath(n));
+  web.sendHeader("Cache-Control", "no-store");
+  web.streamFile(f, "application/octet-stream");
+  f.close();
+}
+
+// Receives one flier (from another board's page or a backup file) into slot n.
+File putFile; bool putOk = false; size_t putBytes = 0;
+void handleFlierPutUpload() {
+  HTTPUpload &u = web.upload();
+  if (u.status == UPLOAD_FILE_START) { FFat.remove("/put.tmp"); putFile = FFat.open("/put.tmp", FILE_WRITE); putOk = (bool)putFile; putBytes = 0; }
+  else if (u.status == UPLOAD_FILE_WRITE) { if (putOk && putFile.write(u.buf, u.currentSize) != u.currentSize) putOk = false; putBytes += u.currentSize; }
+  else if (u.status == UPLOAD_FILE_END) { if (putFile) putFile.close(); }
+  else if (u.status == UPLOAD_FILE_ABORTED) { if (putFile) putFile.close(); putOk = false; }
+}
+void handleFlierPutDone() {
+  web.sendHeader("Access-Control-Allow-Origin", "*");
+  int n = web.arg("n").toInt();
+  const char *why = nullptr;
+  if (n < 1 || n > FLIER_COUNT) why = "That board has no such flier slot.";
+  else if (jobLeft || captureSlot) why = "That board is busy printing or saving a flier. Try again in a moment.";
+  else if (!putOk || !putBytes) why = "The flier didn't arrive in one piece (storage full?).";
+  if (!why) { FFat.remove(flierPath(n)); if (!FFat.rename("/put.tmp", flierPath(n))) why = "Couldn't store the flier."; }
+  putOk = false;
+  if (why) { FFat.remove("/put.tmp"); logEvent(String("Flier copy refused: ") + why); web.send(400, "text/plain", why); return; }
+  String nm = web.arg("name"); nm.trim(); nm = nm.substring(0, 30);
+  int b = constrain((int)web.arg("batch").toInt(), 1, 999);
+  flierName[n] = nm; flierBatch[n] = b;
+  Preferences p; p.begin("btl", false);
+  p.putString(("f" + String(n)).c_str(), nm); p.putInt(("b" + String(n)).c_str(), b); p.end();
+  logEvent("Received " + flierLabel(n) + " into slot " + String(n) + " (" + String(putBytes / 1024 + 1) + " KB)");
+  web.send(200, "text/plain", "ok");
+}
+
+// Other BTL bridges on this network, found by their .local names.
+void handleBoards() {
+  String j = "[";
+  int k = setupMode ? 0 : MDNS.queryService("http", "tcp");
+  for (int i = 0; i < k; i++) {
+    String h = MDNS.hostname(i);
+    if (!h.startsWith(BRIDGE_NAME) || h.startsWith(hostName)) continue;
+    j += String(j.length() > 1 ? "," : "") + "{\"name\":\"" + jsonEsc(h) + "\",\"ip\":\"" + MDNS.address(i).toString() + "\"}";
+  }
+  j += "]";
+  web.sendHeader("Cache-Control", "no-store");
+  web.send(200, "application/json", j);
+}
+
 // Plain text made for pasting into a bug report.
 void handleLog() {
   String t = "BTL Print Bridge log\n";
@@ -978,6 +1104,7 @@ void handleRoot() {
            "<button name=do value=move style=\"margin:0;background:#666\"" + dis + ">Move</button></div></form>";
     }
     h += "</div>";
+    if (fsReady) h += FPSTR(COPY_TOOL);
   }
   if (!setupMode) { String fw = FPSTR(FW_TOOL); fw.replace("%VER%", FIRMWARE_VERSION); h += fw; }
   h += "<div class=card><form method=post action=/save><b>Settings</b>"
@@ -1168,6 +1295,10 @@ void setup() {
   web.on("/", handleRoot);
   web.on("/status", handleStatus);
   web.on("/log", handleLog);
+  web.on("/fliers.json", handleFliersJson);
+  web.on("/flier-file", handleFlierFile);
+  web.on("/flier-put", HTTP_POST, handleFlierPutDone, handleFlierPutUpload);
+  web.on("/boards", handleBoards);
   web.on("/lastlabel.png", []() {
     if (!lastPng) { web.send(404, "text/plain", "No label picture received since the bridge started."); return; }
     web.send_P(200, "image/png", (const char *)lastPng, lastPngLen);

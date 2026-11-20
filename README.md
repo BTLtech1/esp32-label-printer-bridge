@@ -107,6 +107,14 @@ Store up to 5 print jobs on the bridge and print them with the board's **BOOT** 
 
 A flier is saved exactly as your printer's driver made it, so reprint it on the same kind of printer.
 
+**Move, copy and back up.** On the bridge's page:
+
+- **Move to** under a flier puts it in a different click slot. If that slot is taken, the two swap.
+- **Send all fliers to another board** copies every flier, with its name and batch count, to another BTL Print Bridge on the same Wi-Fi. Both boards need firmware 1.11.0 or newer.
+- **Download backup** saves all fliers to one file on your computer. **Restore backup** loads that file onto any board, for example after a fresh install.
+
+Copies go into the same click slots and replace what was there.
+
 ### Optional: your own buttons
 
 Want one button per flier? Wire any momentary push button (arcade buttons, big dome buttons, tactile switches, or mechanical keyboard switches in a 3D-printed case) with two wires: one to its pin, one to **GND**. No resistors needed, and female-to-female jumper wires push onto the board's pins, so no soldering if your buttons have wire leads. Press = 1 copy, hold 2 seconds = batch, press again to stop.
