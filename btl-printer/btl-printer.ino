@@ -34,7 +34,7 @@
 #include "config.h"
 #include "improv_serial.h"       // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.10.0"
+#define FIRMWARE_VERSION "1.10.1"
 ImprovSerial improv(Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -894,6 +894,14 @@ String statusHtml() {
 
 void handleStatus() { web.send(200, "text/html", statusHtml()); }
 
+// The other slots, for a flier's "Move to" list.
+String moveOptions(int n) {
+  String o;
+  for (int k = 1; k <= FLIER_COUNT; k++) if (k != n)
+    o += "<option value=" + String(k) + ">" + String(k) + (k == 1 ? " click" : " clicks") + (flierSize(k) ? " (swaps with " + htmlEsc(flierLabel(k)) + ")" : String(" (empty)")) + "</option>";
+  return o;
+}
+
 // Plain text made for pasting into a bug report.
 void handleLog() {
   String t = "BTL Print Bridge log\n";
@@ -964,7 +972,10 @@ void handleRoot() {
            "<label>Name</label><input name=name maxlength=30 placeholder=\"e.g. Menu\" value=\"" + htmlEsc(flierName[n]) + "\">"
            "<button name=do value=rename style=\"background:#666\">Save name</button> "
            "<button name=do value=save style=\"background:#2563c9\">Save next print here</button> "
-           "<button name=do value=delete style=\"background:#999\"" + dis + ">Delete flier</button></form>";
+           "<button name=do value=delete style=\"background:#999\"" + dis + ">Delete flier</button>"
+           "<div style=\"display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px\"><small>Move to:</small>"
+           "<select name=to style=\"padding:10px;border:1px solid #ccc;border-radius:8px;font:inherit\"" + dis + " aria-label=\"Slot to move this flier to\">" + moveOptions(n) + "</select>"
+           "<button name=do value=move style=\"margin:0;background:#666\"" + dis + ">Move</button></div></form>";
     }
     h += "</div>";
   }
@@ -1026,6 +1037,28 @@ void handleFlier() {
     else if (act == "save") { captureSlot = n; captureUntil = millis() + CAPTURE_MINUTES * 60000UL;
       logEvent("Print your flier now: the next print will be saved as " + flierLabel(n)); }
     else if (act == "delete") { FFat.remove(flierPath(n)); logEvent("Deleted " + flierLabel(n)); }
+    else if (act == "move") {
+      // Move a flier to another slot. If that slot already holds one, the two trade places.
+      int to = web.arg("to").toInt();
+      if (to < 1 || to > FLIER_COUNT || to == n || !flierSize(n)) logEvent("Nothing to move");
+      else if (jobLeft || captureSlot) logEvent("Can't move a flier while printing or saving one");
+      else {
+        const char *tmp = "/swap.bin";
+        bool both = flierSize(to) > 0, ok = true;
+        FFat.remove(tmp);
+        if (both) ok = FFat.rename(flierPath(to), tmp);
+        ok = ok && FFat.rename(flierPath(n), flierPath(to));
+        if (ok && both) ok = FFat.rename(tmp, flierPath(n));
+        if (ok) {
+          String nm = flierName[n]; flierName[n] = flierName[to]; flierName[to] = nm;
+          int b = flierBatch[n]; flierBatch[n] = flierBatch[to]; flierBatch[to] = b;
+          Preferences p; p.begin("btl", false);
+          for (int k : {n, to}) { p.putString(("f" + String(k)).c_str(), flierName[k]); p.putInt(("b" + String(k)).c_str(), flierBatch[k]); }
+          p.end();
+          logEvent("Moved " + flierLabel(to) + " to slot " + String(to) + (both ? ", swapped with slot " + String(n) : String("")));
+        } else logEvent("Couldn't move the flier (storage problem)");
+      }
+    }
     if (act == "rename" || act == "save") {
       String nm = web.arg("name"); nm.trim();
       int b = constrain((int)web.arg("batch").toInt(), 1, 999);
