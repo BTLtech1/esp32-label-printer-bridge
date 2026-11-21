@@ -34,7 +34,7 @@
 #include "config.h"
 #include "improv_serial.h"       // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.11.1"
+#define FIRMWARE_VERSION "1.11.2"
 ImprovSerial improv(Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -281,7 +281,7 @@ bool printerWrite(const uint8_t *data, size_t len) {
   ledSet(0, 0, LED_BRIGHTNESS);  // blue while printing
   xSemaphoreTake(usbLock, portMAX_DELAY);
   bool ok = true;
-  int tries = 0;
+  int tries = 0, waits = 0;
   while (len && ok && printerReady) {
     // After a failed transfer, carry on in small pieces: gentler on a marginal cable or adapter.
     size_t n = len > USB_CHUNK_BYTES ? USB_CHUNK_BYTES : len;
@@ -294,7 +294,20 @@ bool printerWrite(const uint8_t *data, size_t len) {
     xfer->context = nullptr;
     xfer->timeout_ms = 10000;
     if (usb_host_transfer_submit(xfer) != ESP_OK) { ok = false; logNote("USB: printer refused the data (submit failed)"); break; }
-    if (xSemaphoreTake(xferDone, pdMS_TO_TICKS(15000)) != pdTRUE) { ok = false; logNote("USB: printer stopped answering (15 s timeout)"); break; }
+    if (xSemaphoreTake(xferDone, pdMS_TO_TICKS(15000)) != pdTRUE) {
+      // The printer is connected but not taking data. Cancel the stuck transfer to learn how much it took.
+      usb_host_endpoint_halt(devHdl, outEp);
+      usb_host_endpoint_flush(devHdl, outEp);
+      bool got = xSemaphoreTake(xferDone, pdMS_TO_TICKS(2000)) == pdTRUE;
+      usb_host_endpoint_clear(devHdl, outEp);
+      int took = got ? constrain((int)xferSent, 0, (int)n) : 0;
+      char w[LOG_CHARS];
+      snprintf(w, sizeof w, "USB: printer took %d of %u bytes, then accepted nothing for 15 s", took, (unsigned)n);
+      logNote(w);
+      if (got && took > 0 && ++waits <= 20) { data += took; len -= took; continue; }   // slow but moving: keep going
+      logNote("USB: giving up. Is the printer paused, out of labels, lid open, or showing an error light?");
+      ok = false; break;
+    }
     if (xferOk) { data += n; len -= n; continue; }
     int st = xferStatus, sent = constrain((int)xferSent, 0, (int)n);
     const char *why = st == USB_TRANSFER_STATUS_ERROR ? "no answer or signal errors (cable, adapter, or the printer isn't getting 5 V)"
