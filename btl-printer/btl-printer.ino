@@ -1035,7 +1035,7 @@ void handleLog() {
   t += "Running for: " + upTime(millis()) + "\n";
   t += String("Last restart: ") + restartReason() + "\n";
   char ids[12]; snprintf(ids, sizeof ids, "%04x:%04x", usbVid, usbPid);
-  t += "Printer: " + (printerReady ? printerName + (printerModel.length() ? " / " + printerModel : String("")) + " (USB " + ids + ")" : String("not connected")) + "\n";
+  t += "Printer: " + (printerReady ? (printerModel.length() && printerName.indexOf(printerModel) < 0 ? printerName + " / " + printerModel : printerName) + (printerName.indexOf("(USB ") < 0 ? String(" (USB ") + ids + ")" : String("")) : String("not connected")) + "\n";
   t += "Wi-Fi: " + (setupMode ? String("setup mode") : WiFi.status() == WL_CONNECTED ? "connected, signal " + String(WiFi.RSSI()) + " dBm" : String("NOT connected")) + "\n";
   t += "Queue: " + (cfgQueueUrl.length() ? "on, " + cfgLang : String("off")) + "\n";
   t += "Jobs printed: " + String(jobsPrinted) + "\n";
