@@ -149,11 +149,13 @@ No soldering? A conductive pen line across the pads also works. Or use a small *
 
 ## Tested printers
 
-| Printer | Language | Network printing | Notes |
-|---|---|---|---|
-| RONGTA RP421A | ZPL | works | Windows 11, "RONGTA RP421A(ZPL 203DPI)" driver, Raw port 9100 |
-| PM-2411-BT (PM-241 series) | TSPL | TSPL test works | Needs 5 V from the board: bridge the USB-OTG pads (see "5 V on the USB port" above) |
-| Rollo X1038 (USB 09C5:0588) | Its own (not ZPL or TSPL) | works | Windows 11, Rollo driver. Works with a short USB-C cable and no 5 V bridge. A long cable connected but failed to print; with one, a powered 2-in-1 OTG adapter helped. The ZPL/TSPL test buttons and "print text" print nothing; print through the driver instead. |
+| Printer | Printer's USB port | Needs 5 V from the board? | Language | Network printing | Notes |
+|---|---|---|---|---|---|
+| RONGTA RP421A | USB-B | no | ZPL | works | Windows 11, "RONGTA RP421A(ZPL 203DPI)" driver, Raw port 9100 |
+| PM-2411-BT (PM-241 series) | USB-C | **yes** | TSPL | TSPL test works | Bridge the USB-OTG pads or use a powered OTG adapter (see "5 V on the USB port" above) |
+| Rollo X1038 (USB 09C5:0588) | USB-B | no | Its own (not ZPL or TSPL) | works | Windows 11, Rollo driver. Use a short USB cable: a long one connected but failed to print. The ZPL/TSPL test buttons and "print text" print nothing; print through the driver instead. |
+
+So far, the printer with a USB-C port needed 5 V and the ones with a square USB-B port didn't. That's only three printers, so try yours without the bridge first.
 
 Tried it with another printer? Please add it to this table.
 
