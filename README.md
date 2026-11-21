@@ -135,6 +135,7 @@ Want one button per flier? Wire any momentary push button (arcade buttons, big d
 |---|---|
 | Board doesn't light up on the **COM/UART** port with a USB-C charger (but does on the other port) | Many cheap boards lack the resistors USB-C chargers look for on that port. Power it with a **USB-A to USB-C** cable from an ordinary USB-A charger or computer port instead. |
 | Page says **printer not connected** | Check the printer is on and plugged into the **USB** port (not COM). If the last event never mentions "USB:", the printer is probably waiting for 5 V: see "5 V on the USB port" below. |
+| Light is red, or the page says **stopped responding**, with a long cable | Try a shorter USB cable between the board and the printer. A long cable (plus an adapter) can connect and then fail on real print jobs. |
 | Windows can't find the printer | Make sure your computer and the bridge are on the same network. Use the IP address instead of the `.local` name. |
 | Prints blank, garbage, or tiny | That's the driver, not the bridge. Use the same driver and settings that work over a USB cable. |
 | Bridge can't join Wi-Fi | It needs a 2.4 GHz network. If it fails, it goes back to setup mode (BTL-Printer-Setup). |
@@ -151,7 +152,7 @@ No soldering? A conductive pen line across the pads also works. Or use a small *
 |---|---|---|---|
 | RONGTA RP421A | ZPL | works | Windows 11, "RONGTA RP421A(ZPL 203DPI)" driver, Raw port 9100 |
 | PM-2411-BT (PM-241 series) | TSPL | TSPL test works | Needs 5 V from the board: bridge the USB-OTG pads (see "5 V on the USB port" above) |
-| Rollo X1038 (USB 09C5:0588) | Its own (not ZPL or TSPL) | works | Windows 11, Rollo driver. Needs 5 V from the board: a powered 2-in-1 OTG adapter worked, or bridge the USB-OTG pads. The ZPL/TSPL test buttons and "print text" print nothing; print through the driver instead. |
+| Rollo X1038 (USB 09C5:0588) | Its own (not ZPL or TSPL) | works | Windows 11, Rollo driver. Works with a short USB-C cable and no 5 V bridge. A long cable connected but failed to print; with one, a powered 2-in-1 OTG adapter helped. The ZPL/TSPL test buttons and "print text" print nothing; print through the driver instead. |
 
 Tried it with another printer? Please add it to this table.
 
