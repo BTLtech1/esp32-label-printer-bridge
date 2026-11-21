@@ -136,6 +136,7 @@ Want one button per flier? Wire any momentary push button (arcade buttons, big d
 | Board doesn't light up on the **COM/UART** port with a USB-C charger (but does on the other port) | Many cheap boards lack the resistors USB-C chargers look for on that port. Power it with a **USB-A to USB-C** cable from an ordinary USB-A charger or computer port instead. |
 | Page says **printer not connected** | Check the printer is on and plugged into the **USB** port (not COM). If the last event never mentions "USB:", the printer is probably waiting for 5 V: see "5 V on the USB port" below. |
 | Light is red, or the page says **stopped responding**, with a long cable | Try a shorter USB cable between the board and the printer. A long cable (plus an adapter) can connect and then fail on real print jobs. |
+| Printer shows **connected** but nothing prints after earlier failed attempts | Turn the printer off and on, then print again. A print job that was cut off part-way can leave the printer waiting for the rest and refusing new jobs. |
 | Windows can't find the printer | Make sure your computer and the bridge are on the same network. Use the IP address instead of the `.local` name. |
 | Prints blank, garbage, or tiny | That's the driver, not the bridge. Use the same driver and settings that work over a USB cable. |
 | Bridge can't join Wi-Fi | It needs a 2.4 GHz network. If it fails, it goes back to setup mode (BTL-Printer-Setup). |

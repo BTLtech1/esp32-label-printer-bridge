@@ -970,7 +970,7 @@ void handleWinScript() {
 String statusHtml() {
   String h = "<b>Printer:</b> ";
   h += !printerReady ? String("<span class=bad>not connected</span>")
-     : printerTrouble ? "<span class=bad>stopped responding</span> " + htmlEsc(printerName) + "<br><small>The last print didn't get through. Unplug the printer's USB cable from the board and plug it back in. "
+     : printerTrouble ? "<span class=bad>stopped responding</span> " + htmlEsc(printerName) + "<br><small>The last print didn't get through. Turn the printer off and on, then try again. A shorter USB cable often fixes this too. "
                         "If it keeps happening, the printer probably needs 5 V from the board (bridge the USB-OTG pads) or a different cable. The Troubleshooting log below has details.</small>"
      : "<span class=ok>connected</span> " + htmlEsc(printerName);
   h += "<br><b>Wi-Fi:</b> " + (setupMode ? String("setup mode") : htmlEsc(cfgSsid) + " &middot; " + WiFi.localIP().toString() + " &middot; " + hostName + ".local");
