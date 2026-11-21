@@ -34,7 +34,7 @@
 #include "config.h"
 #include "improv_serial.h"       // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.11.2"
+#define FIRMWARE_VERSION "1.12.0"
 ImprovSerial improv(Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -612,6 +612,52 @@ static String decodePngLabel(const uint8_t *png, size_t len, PngDec &d) {
   return "";
 }
 
+// A small built-in font (5x7 dots per letter, scaled up) so the bridge can draw text into a
+// picture. Some TSPL printers (Rollo, for one) only accept pictures: TSPL's TEXT, BOX and BARCODE
+// commands print nothing on them and leave the printer stuck until it's turned off and on.
+static const uint8_t FONT5X7[] PROGMEM = {
+  0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x5F,0x00,0x00,0x00,0x07,0x00,0x07,0x00,0x14,0x7F,0x14,0x7F,0x14,
+  0x24,0x2A,0x7F,0x2A,0x12,0x23,0x13,0x08,0x64,0x62,0x36,0x49,0x55,0x22,0x50,0x00,0x05,0x03,0x00,0x00,
+  0x00,0x1C,0x22,0x41,0x00,0x00,0x41,0x22,0x1C,0x00,0x14,0x08,0x3E,0x08,0x14,0x08,0x08,0x3E,0x08,0x08,
+  0x00,0x50,0x30,0x00,0x00,0x08,0x08,0x08,0x08,0x08,0x00,0x60,0x60,0x00,0x00,0x20,0x10,0x08,0x04,0x02,
+  0x3E,0x51,0x49,0x45,0x3E,0x00,0x42,0x7F,0x40,0x00,0x42,0x61,0x51,0x49,0x46,0x21,0x41,0x45,0x4B,0x31,
+  0x18,0x14,0x12,0x7F,0x10,0x27,0x45,0x45,0x45,0x39,0x3C,0x4A,0x49,0x49,0x30,0x01,0x71,0x09,0x05,0x03,
+  0x36,0x49,0x49,0x49,0x36,0x06,0x49,0x49,0x29,0x1E,0x00,0x36,0x36,0x00,0x00,0x00,0x56,0x36,0x00,0x00,
+  0x08,0x14,0x22,0x41,0x00,0x14,0x14,0x14,0x14,0x14,0x00,0x41,0x22,0x14,0x08,0x02,0x01,0x51,0x09,0x06,
+  0x32,0x49,0x79,0x41,0x3E,0x7E,0x11,0x11,0x11,0x7E,0x7F,0x49,0x49,0x49,0x36,0x3E,0x41,0x41,0x41,0x22,
+  0x7F,0x41,0x41,0x22,0x1C,0x7F,0x49,0x49,0x49,0x41,0x7F,0x09,0x09,0x09,0x01,0x3E,0x41,0x49,0x49,0x7A,
+  0x7F,0x08,0x08,0x08,0x7F,0x00,0x41,0x7F,0x41,0x00,0x20,0x40,0x41,0x3F,0x01,0x7F,0x08,0x14,0x22,0x41,
+  0x7F,0x40,0x40,0x40,0x40,0x7F,0x02,0x0C,0x02,0x7F,0x7F,0x04,0x08,0x10,0x7F,0x3E,0x41,0x41,0x41,0x3E,
+  0x7F,0x09,0x09,0x09,0x06,0x3E,0x41,0x51,0x21,0x5E,0x7F,0x09,0x19,0x29,0x46,0x46,0x49,0x49,0x49,0x31,
+  0x01,0x01,0x7F,0x01,0x01,0x3F,0x40,0x40,0x40,0x3F,0x1F,0x20,0x40,0x20,0x1F,0x3F,0x40,0x38,0x40,0x3F,
+  0x63,0x14,0x08,0x14,0x63,0x07,0x08,0x70,0x08,0x07,0x61,0x51,0x49,0x45,0x43,0x00,0x7F,0x41,0x41,0x00,
+  0x02,0x04,0x08,0x10,0x20,0x00,0x41,0x41,0x7F,0x00,0x04,0x02,0x01,0x02,0x04,0x40,0x40,0x40,0x40,0x40,
+  0x00,0x01,0x02,0x04,0x00,0x20,0x54,0x54,0x54,0x78,0x7F,0x48,0x44,0x44,0x38,0x38,0x44,0x44,0x44,0x20,
+  0x38,0x44,0x44,0x48,0x7F,0x38,0x54,0x54,0x54,0x18,0x08,0x7E,0x09,0x01,0x02,0x0C,0x52,0x52,0x52,0x3E,
+  0x7F,0x08,0x04,0x04,0x78,0x00,0x44,0x7D,0x40,0x00,0x20,0x40,0x44,0x3D,0x00,0x7F,0x10,0x28,0x44,0x00,
+  0x00,0x41,0x7F,0x40,0x00,0x7C,0x04,0x18,0x04,0x78,0x7C,0x08,0x04,0x04,0x78,0x38,0x44,0x44,0x44,0x38,
+  0x7C,0x14,0x14,0x14,0x08,0x08,0x14,0x14,0x18,0x7C,0x7C,0x08,0x04,0x04,0x08,0x48,0x54,0x54,0x54,0x20,
+  0x04,0x3F,0x44,0x40,0x20,0x3C,0x40,0x40,0x20,0x7C,0x1C,0x20,0x40,0x20,0x1C,0x3C,0x40,0x30,0x40,0x3C,
+  0x44,0x28,0x10,0x28,0x44,0x0C,0x50,0x50,0x50,0x3C,0x44,0x64,0x54,0x4C,0x44,0x00,0x08,0x36,0x41,0x00,
+  0x00,0x00,0x7F,0x00,0x00,0x00,0x41,0x36,0x08,0x00,0x08,0x04,0x08,0x10,0x08
+};
+// Draws s into a 1-bit picture (1 = black, rowb bytes per row), each font dot sc x sc pixels.
+static void drawText(uint8_t *bm, int rowb, int W, int H, int x, int y, const String &s, int sc) {
+  for (size_t i = 0; i < s.length(); i++, x += 6 * sc) {
+    uint8_t ch = (uint8_t)s[i];
+    if (ch < 32 || ch > 126) ch = '?';
+    for (int c = 0; c < 5; c++) {
+      uint8_t col = pgm_read_byte(&FONT5X7[(ch - 32) * 5 + c]);
+      for (int r = 0; r < 7; r++) {
+        if (!(col >> r & 1)) continue;
+        for (int yy = y + r * sc; yy < y + (r + 1) * sc; yy++)
+          for (int xx = x + c * sc; xx < x + (c + 1) * sc; xx++)
+            if (xx >= 0 && yy >= 0 && xx < W && yy < H) bm[yy * rowb + (xx >> 3)] |= 0x80 >> (xx & 7);
+      }
+    }
+  }
+}
+
 // Sends the decoded label to the printer in ZPL or TSPL, with the optional text on top.
 // "note" (lines split by "|") is printed big down the label, e.g. a heads-up slip for an order
 // whose label wasn't bought.
@@ -633,6 +679,19 @@ static bool printLabelImage(const PngDec &d, String text, String note) {
   const int BAND = 32;
   auto blank = [&](int y0, int rows) { for (int i = y0 * LBL_ROWB, e = (y0 + rows) * LBL_ROWB; i < e; i++) if (d.out[i]) return false; return true; };
   if (cfgLang == "tspl") {
+    // The text goes into the picture itself (see drawText): right-aligned in the same 360-dot box
+    // ZPL uses for the item code, on up to two lines, and the note lines big down the label.
+    if (text.length()) {
+      int sc = text.length() <= 8 ? 7 : text.length() <= 24 ? 5 : 3, per = 360 / (6 * sc);
+      for (int ln = 0; ln < 2 && ln * per < (int)text.length(); ln++) {
+        String part = text.substring(ln * per, (ln + 1) * per);
+        drawText(d.out, LBL_ROWB, LBL_W, LBL_H, 790 - (int)part.length() * 6 * sc, 412 + ln * 9 * sc, part, sc);
+      }
+    }
+    for (int i = 0; i < nLines; i++) {
+      int sc = min(i < 2 ? 12 : 9, (LBL_W - 60) / (6 * max(1, (int)noteLines[i].length())));
+      drawText(d.out, LBL_ROWB, LBL_W, LBL_H, 30, 160 + i * 120, noteLines[i], max(sc, 2));
+    }
     if (!puts_("SIZE 101.6 mm,152.4 mm\r\nGAP 3 mm,0 mm\r\nDIRECTION 0\r\nCLS\r\n")) return false;
     for (int y0 = 0; y0 < LBL_H; y0 += BAND) {
       int rows = min(BAND, LBL_H - y0);
@@ -642,11 +701,7 @@ static bool printLabelImage(const PngDec &d, String text, String note) {
       if (!puts_("\r\n") || !flush()) return false;
       delay(15);
     }
-    String tail = "";
-    if (text.length()) tail += "TEXT 430,412,\"5\",0,1,1,\"" + text + "\"\r\n";
-    for (int i = 0; i < nLines; i++) tail += "TEXT 30," + String(160 + i * 120) + ",\"5\",0,1,1,\"" + noteLines[i] + "\"\r\n";
-    tail += "PRINT 1,1\r\n";
-    return puts_(tail) && flush();
+    return puts_("PRINT 1,1\r\n") && flush();
   }
   if (!puts_("^XA^PW" + String(LBL_W) + "^LL" + String(LBL_H) + "^LH0,0")) return false;
   static const char HX[] = "0123456789ABCDEF";
@@ -1114,7 +1169,8 @@ void handleRoot() {
          "Mac: System Settings &rarr; Printers &amp; Scanners &rarr; Add Printer &rarr; IP. Address <code>" + ip +
          "</code>, protocol <b>HP Jetdirect &ndash; Socket</b>, then choose your printer's driver.</small></div>";
     h += "<div class=card><b>Test print</b><br><small>Label printers speak different languages. Try ZPL first; if nothing comes out or it prints gibberish, try TSPL. "
-         "If neither works, that's OK: add the bridge to your computer (above) and print a test page with your printer's own driver.</small>"
+         "If neither works, that's OK: add the bridge to your computer (above) and print a test page with your printer's own driver. "
+         "If the printer stops printing after a test, turn it off and on.</small><br>"
          "<form method=post action=/test style=\"display:inline\"><button>Print ZPL test</button></form> "
          "<form method=post action=/test-tspl style=\"display:inline\"><button>Print TSPL test</button></form></div>";
     h += FPSTR(TEXT_TOOL);
@@ -1155,7 +1211,7 @@ void handleRoot() {
        "<label>Queue token <small>(optional)</small></label><input name=qtok type=password placeholder=\"" + String(cfgQueueToken.length() ? "(unchanged)" : "") + "\">"
        "<label>Printer language <small>(for shipping labels from the queue)</small></label><select name=lang style=\"width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;font:inherit\">"
        "<option value=zpl" + String(cfgLang == "zpl" ? " selected" : "") + ">ZPL (Zebra, RONGTA, most 4x6 printers)</option>"
-       "<option value=tspl" + String(cfgLang == "tspl" ? " selected" : "") + ">TSPL (many budget label printers)</option></select>"
+       "<option value=tspl" + String(cfgLang == "tspl" ? " selected" : "") + ">TSPL (Rollo and many budget label printers)</option></select>"
        "<button>Save and restart</button></form></div>";
   h += FPSTR(LOG_TOOL);
   web.send(200, "text/html", h);
@@ -1174,11 +1230,29 @@ void handleSave() {
   ESP.restart();
 }
 
+// The TSPL test is sent as a picture, the one thing every TSPL printer understands.
 void handleTestTspl() {
-  const char *tspl = "SIZE 100 mm,150 mm\r\nGAP 3 mm,0 mm\r\nCLS\r\nBOX 30,30,780,330,4\r\n"
-                     "TEXT 60,60,\"4\",0,1,1,\"BTL Print Bridge\"\r\nTEXT 60,140,\"3\",0,1,1,\"Wi-Fi printing works.\"\r\n"
-                     "BARCODE 60,200,\"128\",80,1,0,3,3,\"BTL-OK\"\r\nPRINT 1,1\r\n";
-  bool ok = printerWrite((const uint8_t *)tspl, strlen(tspl));
+  const int W = 800, ROWB = W / 8, H = 232;
+  uint8_t *bm = (uint8_t *)calloc(ROWB, H);
+  bool ok = bm != nullptr;
+  if (ok) {
+    for (int y = 0; y < H; y++) for (int x = 0; x < W; x++)
+      if (x < 4 || y < 4 || x >= W - 4 || y >= H - 4) bm[y * ROWB + (x >> 3)] |= 0x80 >> (x & 7);   // border
+    drawText(bm, ROWB, W, H, 40, 36, "BTL Print Bridge", 7);
+    drawText(bm, ROWB, W, H, 40, 110, "Wi-Fi printing works.", 5);
+    drawText(bm, ROWB, W, H, 40, 170, "TSPL test (sent as a picture)", 4);
+    for (int i = 0; i < ROWB * H; i++) bm[i] = ~bm[i];   // TSPL: 0 = black
+    const char *head = "SIZE 100 mm,150 mm\r\nGAP 3 mm,0 mm\r\nCLS\r\n";
+    ok = printerWrite((const uint8_t *)head, strlen(head));
+    for (int y0 = 0; ok && y0 < H; y0 += 32) {
+      int rows = min(32, H - y0);
+      String cmd = "BITMAP 0," + String(40 + y0) + "," + String(ROWB) + "," + String(rows) + ",0,";
+      ok = printerWrite((const uint8_t *)cmd.c_str(), cmd.length()) && printerWrite(bm + y0 * ROWB, rows * ROWB) && printerWrite((const uint8_t *)"\r\n", 2);
+      delay(15);
+    }
+    if (ok) ok = printerWrite((const uint8_t *)"PRINT 1,1\r\n", 11);
+    free(bm);
+  }
   if (ok) jobsPrinted++;
   logEvent(ok ? "Printed TSPL test label" : "TSPL test FAILED (printer not ready)");
   web.sendHeader("Location", "/");
