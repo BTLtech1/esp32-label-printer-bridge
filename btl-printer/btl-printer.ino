@@ -34,7 +34,7 @@
 #include "config.h"
 #include "improv_serial.h"       // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.11.0"
+#define FIRMWARE_VERSION "1.11.1"
 ImprovSerial improv(Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -158,7 +158,10 @@ static void clientEventCb(const usb_host_client_event_msg_t *msg, void *arg) {
   else if (msg->event == USB_HOST_CLIENT_EVENT_DEV_GONE) devGone = true;
 }
 
+static volatile int xferStatus = 0, xferSent = 0;
+volatile bool printerTrouble = false;   // the last print job failed over USB (light goes red until one works)
 static void xferCb(usb_transfer_t *t) {
+  xferStatus = t->status; xferSent = t->actual_num_bytes;
   xferOk = (t->status == USB_TRANSFER_STATUS_COMPLETED);
   xSemaphoreGive(xferDone);
 }
@@ -207,7 +210,7 @@ static void openPrinter(uint8_t addr) {
 
   const usb_device_desc_t *dd;
   usb_host_get_device_descriptor(devHdl, &dd);
-  usb_device_info_t info;
+  usb_device_info_t info = {};
   printerModel = "";
   if (usb_host_device_info(devHdl, &info) == ESP_OK) {
     printerModel = usbStr(info.str_desc_product);
@@ -218,8 +221,10 @@ static void openPrinter(uint8_t addr) {
   snprintf(buf, sizeof buf, "USB %04X:%04X", dd->idVendor, dd->idProduct);
   printerName = printerModel.length() ? printerModel + " (" + buf + ")" : String(buf) + (bestIsPrinter ? " (printer)" : "");
   usbVid = dd->idVendor; usbPid = dd->idProduct;
-  printerReady = true;
+  printerReady = true; printerTrouble = false;
   logEvent("Printer connected: " + printerName);
+  { char b[LOG_CHARS]; snprintf(b, sizeof b, "USB: using interface %d (%s), endpoint 0x%02X, %s speed", bestIntf, bestIsPrinter ? "printer class" : "not printer class",
+             bestEp, info.speed == USB_SPEED_HIGH ? "high" : info.speed == USB_SPEED_FULL ? "full" : "low"); logNote(b); }
 }
 
 static void usbHostTask(void *) {
@@ -276,8 +281,11 @@ bool printerWrite(const uint8_t *data, size_t len) {
   ledSet(0, 0, LED_BRIGHTNESS);  // blue while printing
   xSemaphoreTake(usbLock, portMAX_DELAY);
   bool ok = true;
+  int tries = 0;
   while (len && ok && printerReady) {
+    // After a failed transfer, carry on in small pieces: gentler on a marginal cable or adapter.
     size_t n = len > USB_CHUNK_BYTES ? USB_CHUNK_BYTES : len;
+    if (tries && n > 1024) n = 1024;
     memcpy(xfer->data_buffer, data, n);
     xfer->num_bytes = n;
     xfer->device_handle = devHdl;
@@ -287,10 +295,26 @@ bool printerWrite(const uint8_t *data, size_t len) {
     xfer->timeout_ms = 10000;
     if (usb_host_transfer_submit(xfer) != ESP_OK) { ok = false; logNote("USB: printer refused the data (submit failed)"); break; }
     if (xSemaphoreTake(xferDone, pdMS_TO_TICKS(15000)) != pdTRUE) { ok = false; logNote("USB: printer stopped answering (15 s timeout)"); break; }
-    ok = xferOk;
-    if (!ok) logNote("USB: printer rejected the data (transfer error)");
-    data += n; len -= n;
+    if (xferOk) { data += n; len -= n; continue; }
+    int st = xferStatus, sent = constrain((int)xferSent, 0, (int)n);
+    const char *why = st == USB_TRANSFER_STATUS_ERROR ? "no answer or signal errors (cable, adapter, or the printer isn't getting 5 V)"
+                    : st == USB_TRANSFER_STATUS_STALL ? "the printer refused it (stall)"
+                    : st == USB_TRANSFER_STATUS_NO_DEVICE ? "the printer is gone"
+                    : st == USB_TRANSFER_STATUS_TIMED_OUT ? "timed out"
+                    : st == USB_TRANSFER_STATUS_CANCELED ? "cancelled" : "unknown error";
+    char b[LOG_CHARS];
+    snprintf(b, sizeof b, "USB: failed after %d of %u bytes: %s", sent, (unsigned)n, why);
+    logNote(b);
+    if (st == USB_TRANSFER_STATUS_NO_DEVICE || ++tries > 3) { ok = false; break; }
+    // A failed transfer leaves the connection halted: reset it, then continue from where it stopped.
+    usb_host_endpoint_flush(devHdl, outEp);
+    if (usb_host_endpoint_clear(devHdl, outEp) != ESP_OK) { ok = false; logNote("USB: couldn't reset the connection to the printer"); break; }
+    data += sent; len -= sent;
+    vTaskDelay(pdMS_TO_TICKS(100));
+    snprintf(b, sizeof b, "USB: trying again in smaller pieces (attempt %d of 3)", tries);
+    logNote(b);
   }
+  if (printerReady) printerTrouble = !ok;
   xSemaphoreGive(usbLock);
   return ok;
 }
@@ -391,7 +415,7 @@ extern bool setupMode;
 void updateLed() {
   const uint8_t L = LED_BRIGHTNESS;
   if (setupMode) ledSet(L / 2, 0, L);                              // purple: setup mode
-  else if (!printerReady) ledSet(L, 0, 0);                         // red: no printer
+  else if (!printerReady || printerTrouble) ledSet(L, 0, 0);       // red: no printer, or it stopped responding
   else if (jobLeft) ledSet(0, 0, L);                               // blue: printing
   else if (captureSlot && millis() < captureUntil) ledSet(L, L * 2 / 3, 0);  // yellow: waiting to save a flier
   else ledSet(0, L * 2 / 3, 0);                                    // green: ready
@@ -932,7 +956,10 @@ void handleWinScript() {
 
 String statusHtml() {
   String h = "<b>Printer:</b> ";
-  h += printerReady ? "<span class=ok>connected</span> " + htmlEsc(printerName) : String("<span class=bad>not connected</span>");
+  h += !printerReady ? String("<span class=bad>not connected</span>")
+     : printerTrouble ? "<span class=bad>stopped responding</span> " + htmlEsc(printerName) + "<br><small>The last print didn't get through. Unplug the printer's USB cable from the board and plug it back in. "
+                        "If it keeps happening, the printer probably needs 5 V from the board (bridge the USB-OTG pads) or a different cable. The Troubleshooting log below has details.</small>"
+     : "<span class=ok>connected</span> " + htmlEsc(printerName);
   h += "<br><b>Wi-Fi:</b> " + (setupMode ? String("setup mode") : htmlEsc(cfgSsid) + " &middot; " + WiFi.localIP().toString() + " &middot; " + hostName + ".local");
   h += "<br><b>Jobs printed:</b> " + String(jobsPrinted) + "<br><b>Last event:</b> " + htmlEsc(lastEvent);
   if (jobLeft)
