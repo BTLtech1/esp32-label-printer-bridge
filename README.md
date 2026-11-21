@@ -151,6 +151,7 @@ No soldering? A conductive pen line across the pads also works. Or use a small *
 |---|---|---|---|
 | RONGTA RP421A | ZPL | works | Windows 11, "RONGTA RP421A(ZPL 203DPI)" driver, Raw port 9100 |
 | PM-2411-BT (PM-241 series) | TSPL | TSPL test works | Needs 5 V from the board: bridge the USB-OTG pads (see "5 V on the USB port" above) |
+| Rollo X1038 (USB 09C5:0588) | Its own (not ZPL or TSPL) | works | Windows 11, Rollo driver. Needs 5 V from the board: a powered 2-in-1 OTG adapter worked, or bridge the USB-OTG pads. The ZPL/TSPL test buttons and "print text" print nothing; print through the driver instead. |
 
 Tried it with another printer? Please add it to this table.
 
