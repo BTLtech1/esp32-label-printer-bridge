@@ -34,7 +34,7 @@
 #include "config.h"
 #include "improv_serial.h"       // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.12.0"
+#define FIRMWARE_VERSION "1.13.0"
 ImprovSerial improv(Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -276,7 +276,20 @@ void ledSet(uint8_t r, uint8_t g, uint8_t b) {
   for (uint8_t pin : ledPins) rgbLedWrite(pin, r, g, b);
 }
 
+// "Reprint the last label": while a label from the computer, the page or the queue is going to
+// the printer, a copy is kept in memory (never in storage; it's gone when the board restarts).
+// Only done when a button is set to reprint. Fliers and test labels aren't recorded.
+#define LAST_JOB_MAX (700 * 1024)
+uint8_t *lastJob = nullptr;
+size_t lastLen = 0;
+bool lastRec = false, lastFresh = false, lastOver = false, lastValid = false;
+volatile bool reprintPending = false;
+
 bool printerWrite(const uint8_t *data, size_t len) {
+  if (lastRec && lastJob) {
+    if (lastFresh) { lastLen = 0; lastOver = false; lastValid = false; lastFresh = false; }
+    if (lastLen + len <= LAST_JOB_MAX) { memcpy(lastJob + lastLen, data, len); lastLen += len; } else lastOver = true;
+  }
   if (!printerReady) return false;
   ledSet(0, 0, LED_BRIGHTNESS);  // blue while printing
   xSemaphoreTake(usbLock, portMAX_DELAY);
@@ -358,6 +371,35 @@ String flierLabel(int n) { return flierName[n].length() ? flierName[n] : "Flier 
 int jobFlier = 0, jobLeft = 0, jobDone = 0;
 int flierBatch[FLIER_COUNT + 1];   // copies printed by holding the button
 
+// What each wired button does: 1..FLIER_COUNT = print that flier (the default is its own
+// number), or one of the actions below. Set on the bridge's page, kept in settings.
+#define ACT_REPRINT 100
+#define ACT_STOP    101
+int btnAct[FLIER_COUNT + 1];
+
+void lastBegin() {
+  lastRec = false;
+  bool wanted = false;
+  for (int i = 1; i <= FLIER_COUNT; i++) if (btnAct[i] == ACT_REPRINT) wanted = true;
+  if (!wanted) { if (lastJob) { free(lastJob); lastJob = nullptr; lastValid = false; } return; }
+  if (!lastJob) lastJob = (uint8_t *)ps_malloc(LAST_JOB_MAX);
+  if (!lastJob) return;
+  lastFresh = true; lastRec = true;      // the old copy is kept until the new job's first bytes arrive
+}
+void lastEnd(bool ok) {
+  if (lastRec && !lastFresh) lastValid = ok && !lastOver && lastLen > 0;
+  lastRec = false;
+}
+
+void serviceReprint() {
+  if (!reprintPending) return;
+  reprintPending = false;
+  if (!lastValid || !lastJob) { logEvent("Nothing to reprint yet (labels are remembered from when a button was set to Reprint, until the board restarts)"); return; }
+  bool ok = printerWrite(lastJob, lastLen);
+  if (ok) jobsPrinted++;
+  logEvent(ok ? "Reprinted the last label, " + String(lastLen) + " bytes" : String("Reprint FAILED (printer not ready)"));
+}
+
 void startFlier(int n, int copies) {
   if (n < 1 || n > FLIER_COUNT) return;
   if (!flierSize(n)) { logEvent(flierLabel(n) + " is empty: save a print to it first"); return; }
@@ -389,16 +431,23 @@ void serviceButtons() {
   static uint32_t downAt[FLIER_COUNT + 1] = {};
   static bool held[FLIER_COUNT + 1] = {};
   static uint32_t lastAction = 0;
-  // Wired buttons: GPIO pins, one per flier. Press = 1 copy, hold 2 s = batch.
+  // Wired buttons: GPIO pins. Each does what it's set to on the page (btnAct): by default
+  // button N prints flier N. Press = 1 copy, hold 2 s = that flier's batch.
+  auto act = [&](int i, bool hold) {
+    int a = btnAct[i];
+    if (a == ACT_STOP) stopFlier();
+    else if (a == ACT_REPRINT) reprintPending = true;
+    else startFlier(a, hold ? flierBatch[constrain(a, 1, FLIER_COUNT)] : 1);
+  };
   for (int i = 1; i <= FLIER_COUNT; i++) {
     bool down = digitalRead(flierPins[i - 1]) == LOW;
     if (down && !downAt[i]) {                       // just pressed
       downAt[i] = millis(); held[i] = false;
       if (jobLeft && millis() - lastAction > 500) { stopFlier(); held[i] = true; lastAction = millis(); }  // any press stops a batch
     } else if (down && !held[i] && millis() - downAt[i] > 2000) {   // held 2 s: batch
-      held[i] = true; lastAction = millis(); startFlier(i, flierBatch[i]);
+      held[i] = true; lastAction = millis(); act(i, true);
     } else if (!down && downAt[i]) {                // released
-      if (!held[i] && millis() - downAt[i] > 30 && millis() - lastAction > 500) { lastAction = millis(); startFlier(i, 1); }
+      if (!held[i] && millis() - downAt[i] > 30 && millis() - lastAction > 500) { lastAction = millis(); act(i, false); }
       downAt[i] = 0;
     }
   }
@@ -443,6 +492,7 @@ void serviceRawPrinting() {
   if (slot) out = FFat.open("/capture.tmp", FILE_WRITE);
   size_t total = 0; bool ok = true;
   uint32_t lastData = millis();
+  if (!slot) lastBegin();
   while (c.connected() || c.available()) {
     int n = c.read(netBuf, sizeof netBuf);
     if (n > 0) {
@@ -456,6 +506,7 @@ void serviceRawPrinting() {
     }
   }
   c.stop();
+  lastEnd(ok && total);
   if (slot) {
     out.close();
     if (!total) return;  // just a connection check, keep waiting
@@ -758,6 +809,7 @@ void pollQueue() {
   }
   http.end();
   bool ok = false;
+  lastBegin();
   if (got == size && isPng(job, size)) {
     PngDec d;
     String err = decodePngLabel(job, size, d);
@@ -769,6 +821,7 @@ void pollQueue() {
     ok = (got == size) && printerWrite(job, size);
   }
   free(job);
+  lastEnd(ok);
   if (!ok) { logEvent("Queue: job " + id + " FAILED, will retry"); return; }
   jobsPrinted++;
   logEvent("Printed queued job " + id);
@@ -1123,6 +1176,18 @@ void handleBoards() {
   web.send(200, "application/json", j);
 }
 
+void handleButtons() {
+  Preferences p; p.begin("btl", false);
+  for (int i = 1; i <= FLIER_COUNT; i++) {
+    int a = web.arg("a" + String(i)).toInt();
+    if (a == ACT_REPRINT || a == ACT_STOP || (a >= 1 && a <= FLIER_COUNT)) { btnAct[i] = a; p.putInt(("a" + String(i)).c_str(), a); }
+  }
+  p.end();
+  logEvent("Saved what the extra buttons do");
+  web.sendHeader("Location", "/");
+  web.send(303);
+}
+
 // Plain text made for pasting into a bug report.
 void handleLog() {
   String t = "BTL Print Bridge log\n";
@@ -1178,7 +1243,7 @@ void handleRoot() {
          "within " + String(CAPTURE_MINUTES) + " minutes. It's stored instead of printed.<br>"
          "To print it: click the board's <b>BOOT</b> button 1 to " + String(FLIER_COUNT) + " times quickly for Flier 1 to " + String(FLIER_COUNT) + ". "
          "Hold the last click for 2 seconds to print the batch, and press again to stop.<br>"
-         "Optional extra buttons: GPIO " + flierPinList() + " to GND for Flier 1 to " + String(FLIER_COUNT) + " (press = 1 copy, hold = batch).</small>";
+         "Optional extra buttons: wire each one to a pin and to GND, then choose what it does under <b>Extra buttons</b> below.</small>";
     if (!fsReady) h += "<p class=bad>Storage isn't available on this board.</p>";
     for (int n = 1; n <= FLIER_COUNT; n++) {
       size_t z = flierSize(n);
@@ -1201,6 +1266,18 @@ void handleRoot() {
     }
     h += "</div>";
     if (fsReady) h += FPSTR(COPY_TOOL);
+    h += "<div class=card><b>Extra buttons</b> <small>(optional)</small><br><small>Wire a push button between the pin shown and <b>GND</b>. No resistors needed. "
+         "Press = 1 copy, hold 2 seconds = that flier's batch, press any button to stop a batch.</small><form method=post action=/buttons>";
+    for (int i = 1; i <= FLIER_COUNT; i++) {
+      h += "<div style=\"display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px\"><small style=\"min-width:150px\">Button " + String(i) + " (GPIO " + String(flierPins[i - 1]) + ")</small>"
+           "<select name=a" + String(i) + " style=\"flex:1;min-width:180px;padding:10px;border:1px solid #ccc;border-radius:8px;font:inherit\" aria-label=\"What button " + String(i) + " does\">";
+      for (int k = 1; k <= FLIER_COUNT; k++)
+        h += "<option value=" + String(k) + (btnAct[i] == k ? " selected" : "") + ">Print " + (flierName[k].length() ? "Flier " + String(k) + ": " + htmlEsc(flierName[k]) : "Flier " + String(k)) + "</option>";
+      h += "<option value=" + String(ACT_REPRINT) + (btnAct[i] == ACT_REPRINT ? " selected" : "") + ">Reprint the last label</option>"
+           "<option value=" + String(ACT_STOP) + (btnAct[i] == ACT_STOP ? " selected" : "") + ">Stop printing</option></select></div>";
+    }
+    h += "<button>Save buttons</button></form><small>Reprint repeats the last label sent from a computer, this page or the order queue. "
+         "While a button is set to Reprint, the board keeps that one label in memory until it restarts.</small></div>";
   }
   if (!setupMode) { String fw = FPSTR(FW_TOOL); fw.replace("%VER%", FIRMWARE_VERSION); h += fw; }
   h += "<div class=card><form method=post action=/save><b>Settings</b>"
@@ -1317,10 +1394,12 @@ void handleFlier() {
 bool rawOk = false; size_t rawBytes = 0;
 void handleRawUpload() {
   HTTPUpload &u = web.upload();
-  if (u.status == UPLOAD_FILE_START) { rawOk = printerReady; rawBytes = 0; }
+  if (u.status == UPLOAD_FILE_START) { rawOk = printerReady; rawBytes = 0; lastBegin(); }
   else if (u.status == UPLOAD_FILE_WRITE) { if (rawOk && !printerWrite(u.buf, u.currentSize)) rawOk = false; rawBytes += u.currentSize; }
+  else if (u.status == UPLOAD_FILE_ABORTED) lastEnd(false);
 }
 void handleRawDone() {
+  lastEnd(rawOk && rawBytes);
   if (rawOk && rawBytes) { jobsPrinted++; logEvent("Printed a label from the page"); web.send(200, "text/plain", "Sent to the printer."); }
   else { logEvent("Label from the page FAILED (printer not ready)"); web.send(200, "text/plain", "Printer not ready."); }
 }
@@ -1399,7 +1478,8 @@ void setup() {
     }
   });
   fsReady = FFat.begin(true);  // formats the storage area the first time
-  { Preferences p; p.begin("btl", true); for (int n = 1; n <= FLIER_COUNT; n++) { flierName[n] = p.getString(("f" + String(n)).c_str(), ""); flierBatch[n] = p.getInt(("b" + String(n)).c_str(), 10); } p.end(); }
+  { Preferences p; p.begin("btl", true); for (int n = 1; n <= FLIER_COUNT; n++) { flierName[n] = p.getString(("f" + String(n)).c_str(), ""); flierBatch[n] = p.getInt(("b" + String(n)).c_str(), 10);
+      int a = p.getInt(("a" + String(n)).c_str(), n); btnAct[n] = (a == ACT_REPRINT || a == ACT_STOP || (a >= 1 && a <= FLIER_COUNT)) ? a : n; } p.end(); }
   pinMode(0, INPUT_PULLUP);
   for (uint8_t pin : flierPins) pinMode(pin, INPUT_PULLUP);
   { uint64_t mac = ESP.getEfuseMac(); char sfx[8]; snprintf(sfx, sizeof sfx, "-%02x%02x", (uint8_t)(mac >> 32), (uint8_t)(mac >> 40)); hostName = String(BRIDGE_NAME) + sfx; }
@@ -1422,6 +1502,7 @@ void setup() {
   web.on("/test", HTTP_POST, handleTest);
   web.on("/test-tspl", HTTP_POST, handleTestTspl);
   web.on("/flier", HTTP_POST, handleFlier);
+  web.on("/buttons", HTTP_POST, handleButtons);
   web.on("/raw", HTTP_POST, handleRawDone, handleRawUpload);
   web.on("/update", HTTP_POST, handleUpdateDone, handleUpdateUpload);
   web.onNotFound([] { web.sendHeader("Location", "/"); web.send(302); });
@@ -1438,6 +1519,7 @@ void loop() {
     serviceRawPrinting();
     serviceButtons();
     serviceFlierJob();
+    serviceReprint();
     pollQueue();
     if (WiFi.status() != WL_CONNECTED) { static uint32_t lastTry = 0; if (millis() - lastTry > 30000) { lastTry = millis(); WiFi.reconnect(); } }
   }

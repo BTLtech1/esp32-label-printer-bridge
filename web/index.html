@@ -256,18 +256,18 @@
 
     <li class="step optional">
       <h2>Saved fliers <span class="opt">optional</span></h2>
-      <p>Save up to 5 fliers on the bridge, then print them with the board's <b>BOOT</b> button. No computer needed.</p>
+      <p>Save up to 7 fliers on the bridge, then print them with the board's <b>BOOT</b> button. No computer needed.</p>
       <div class="bridge"><input id="bn" placeholder="Your bridge, e.g. btl-printer-c854 or 192.168.1.50" autocomplete="off" spellcheck="false" aria-label="Your bridge's name or IP address">
         <button type="button" class="btn" id="bo">Open my bridge</button></div>
       <p class="muted">Type it once and this page remembers it. The name is <b>btl-printer-</b> plus 4 letters/numbers; you can type just those 4. Don't know it? Run the line from Step 5 again: it finds your bridge, shows its name and opens its page. It's also in your router's device list.</p>
       <ol>
         <li>Open the bridge's page: use the box above (or the <b>BTL Print Bridge</b> desktop shortcut, if you made one in Step 5). Under <b>Saved fliers</b>, pick a flier and click <b>Save next print here</b>. The light turns yellow while it waits.</li>
         <li>Within 5 minutes, print your flier from your computer as usual. The bridge saves it instead of printing it.</li>
-        <li>Print it with the <b>BOOT</b> button: click once for Flier 1, twice quickly for Flier 2, and so on up to 5. For a batch, hold the last click for 2 seconds (Flier 2: click, click-and-hold). Press again to stop a batch. A batch is 10 copies; change it next to each flier on the bridge's page.</li>
+        <li>Print it with the <b>BOOT</b> button: click once for Flier 1, twice quickly for Flier 2, and so on up to 7. For a batch, hold the last click for 2 seconds (Flier 2: click, click-and-hold). Press again to stop a batch. A batch is 10 copies; change it next to each flier on the bridge's page.</li>
       </ol>
       <div class="aside">
         <p class="t">Optional: add your own buttons</p>
-        <p>Want one button per flier? Wire each button to a pin, <b>GPIO 4, 5, 6, 7, 15</b> for Flier 1 to 5, and its other wire to <b>GND</b>. No resistors needed; female jumper wires push right onto the board's pins. Press = 1 copy, hold 2 seconds = batch, press again to stop.</p>
+        <p>Want real buttons? Wire each button to a pin, <b>GPIO 4, 5, 6, 7, 15, 16, 17</b> for buttons 1 to 7, and its other wire to <b>GND</b>. Each prints its own flier unless you change it under <b>Extra buttons</b> on the bridge's page (another flier, reprint the last label, or stop). No resistors needed; female jumper wires push right onto the board's pins. Press = 1 copy, hold 2 seconds = batch, press again to stop.</p>
       </div>
       <p class="muted">A flier is saved exactly as your printer's driver made it, so print it on the same kind of printer.</p>
     </li>

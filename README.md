@@ -7,7 +7,7 @@ Turn a cheap USB label printer into a **Wi-Fi printer** with a ~$10 ESP32-S3 boa
 - **Print text from the bridge's page.** Type a few words, see a preview sized to your label, print. No driver needed (ZPL or TSPL printers).
 - **Status light.** The board's colour LED shows green = ready, blue = printing, red = no printer, yellow = waiting to save a flier, purple = setup mode.
 - **Updates over Wi-Fi.** The bridge's page checks for new versions; click **Update now**, no cables needed.
-- **Saved fliers.** Save up to 5 fliers to the board and print them with its BOOT button (1 to 5 clicks), no computer needed. Hold the last click for a batch. Extra wired buttons are optional.
+- **Saved fliers.** Save up to 7 fliers to the board and print them with its BOOT button (1 to 7 clicks), no computer needed. Hold the last click for a batch. Extra wired buttons are optional.
 - **Optional automatic printing.** The bridge can check a web address every few seconds and print any ready-made jobs it finds, for example shipping labels for new orders.
 
 No app, no cloud account, no AI needed. Made by [BTL](https://btlstore.com).
@@ -95,12 +95,12 @@ Open the bridge's page. The **Firmware** box says whether a newer version exists
 
 ## Saved fliers
 
-Store up to 5 print jobs on the bridge and print them with the board's **BOOT** button, no computer needed.
+Store up to 7 print jobs on the bridge and print them with the board's **BOOT** button, no computer needed.
 
 1. Open the bridge's page (**Open my bridge** in Step 6 of the [install page](https://btltech1.github.io/esp32-label-printer-bridge), or the desktop shortcut if you made one). Under **Saved fliers**, pick a flier and click **Save next print here**.
 2. Within 5 minutes, print your flier from your computer to the bridge's printer as usual. The bridge saves it instead of printing it.
 3. Print it with the **BOOT** button:
-   - **1 to 5 quick clicks** print Flier 1 to 5 (1 copy).
+   - **1 to 7 quick clicks** print Flier 1 to 7 (1 copy).
    - **Hold the last click** for 2 seconds for that flier's batch (e.g. click, click-and-hold = Flier 2's batch). The batch is 10 copies unless you change it next to the flier on the bridge's page.
    - **Press again** during a batch to stop it.
    - The bridge's page has a Print button and a Copies box for each flier too.
@@ -117,15 +117,19 @@ Copies go into the same click slots and replace what was there.
 
 ### Optional: your own buttons
 
-Want one button per flier? Wire any momentary push button (arcade buttons, big dome buttons, tactile switches, or mechanical keyboard switches in a 3D-printed case) with two wires: one to its pin, one to **GND**. No resistors needed, and female-to-female jumper wires push onto the board's pins, so no soldering if your buttons have wire leads. Press = 1 copy, hold 2 seconds = batch, press again to stop.
+Want real buttons? Wire any momentary push button (arcade buttons, big dome buttons, tactile switches, or mechanical keyboard switches in a 3D-printed case) with two wires: one to its pin, one to **GND**. No resistors needed, and female-to-female jumper wires push onto the board's pins, so no soldering if your buttons have wire leads. Press = 1 copy, hold 2 seconds = batch, press again to stop.
 
-| Flier | Pin |
+By default button 1 prints Flier 1 and so on. Under **Extra buttons** on the bridge's page you can set any button to print a different flier, **reprint the last label**, or **stop printing**. Reprint repeats the last label sent from a computer, the page or the order queue; while a button is set to it, the board keeps that one label in memory until it restarts.
+
+| Button | Pin |
 |---|---|
 | 1 | GPIO 4 |
 | 2 | GPIO 5 |
 | 3 | GPIO 6 |
 | 4 | GPIO 7 |
 | 5 | GPIO 15 |
+| 6 | GPIO 16 |
+| 7 | GPIO 17 |
 
 ## Troubleshooting
 
