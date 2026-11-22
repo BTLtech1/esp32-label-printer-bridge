@@ -754,6 +754,11 @@ static bool printLabelImage(const PngDec &d, String text, String note) {
     }
     return puts_("PRINT 1,1\r\n") && flush();
   }
+  // Set the printer up first, the way a Windows label driver does before every job: label with
+  // gaps (^MNW), its width and length, normal backfeed, no offsets. Without this the label
+  // inherits whatever the last job left behind. A driver set to "continuous" media (^MNN) turns
+  // gap sensing off, and order labels then start wherever the paper happens to be: top cut off.
+  if (!puts_("^XA^SZ2^JMA^MCY^PMN^PW" + String(LBL_W) + "^MNW^LL" + String(LBL_H) + "~JSN^JZY^LH0,0^LRN^XZ")) return false;
   if (!puts_("^XA^PW" + String(LBL_W) + "^LL" + String(LBL_H) + "^LH0,0")) return false;
   static const char HX[] = "0123456789ABCDEF";
   for (int y0 = 0; y0 < LBL_H; y0 += BAND) {

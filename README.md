@@ -141,6 +141,7 @@ By default button 1 prints Flier 1 and so on. Under **Extra buttons** on the bri
 | Page says **printer not connected** | Check the printer is on and plugged into the **USB** port (not COM). If the last event never mentions "USB:", the printer is probably waiting for 5 V: see "5 V on the USB port" below. |
 | Light is red, or the page says **stopped responding**, with a long cable | Try a shorter USB cable between the board and the printer. A long cable (plus an adapter) can connect and then fail on real print jobs. |
 | Printer shows **connected** but nothing prints after earlier failed attempts | Turn the printer off and on, then print again. A print job that was cut off part-way can leave the printer waiting for the rest and refusing new jobs. |
+| Labels print too high or low, with the top or bottom cut off | Your printer driver is probably set to **continuous** paper. In the driver's Printing preferences set the media type to labels **with gaps**. A flier saved while it was set to continuous keeps that setting inside it, so save that flier again afterwards. From firmware 1.13.0 automatic order labels set this themselves. |
 | Windows can't find the printer | Make sure your computer and the bridge are on the same network. Use the IP address instead of the `.local` name. |
 | Prints blank, garbage, or tiny | That's the driver, not the bridge. Use the same driver and settings that work over a USB cable. |
 | Bridge can't join Wi-Fi | It needs a 2.4 GHz network. If it fails, it goes back to setup mode (BTL-Printer-Setup). |
