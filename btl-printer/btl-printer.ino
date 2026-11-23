@@ -34,7 +34,7 @@
 #include "config.h"
 #include "improv_serial.h"       // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.13.0"
+#define FIRMWARE_VERSION "1.14.0"
 ImprovSerial improv(Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -283,7 +283,9 @@ void ledSet(uint8_t r, uint8_t g, uint8_t b) {
 uint8_t *lastJob = nullptr;
 size_t lastLen = 0;
 bool lastRec = false, lastFresh = false, lastOver = false, lastValid = false;
-volatile bool reprintPending = false;
+volatile int reprintPending = 0;        // how many reprints a button asked for
+#define MAX_CLICKS 20                   // most copies a wired button counts (a bouncing key can't run off a roll)
+uint32_t blinkUntil = 0;                // status light flashes white while > millis(): one flash per counted click
 
 bool printerWrite(const uint8_t *data, size_t len) {
   if (lastRec && lastJob) {
@@ -393,11 +395,12 @@ void lastEnd(bool ok) {
 
 void serviceReprint() {
   if (!reprintPending) return;
-  reprintPending = false;
+  int n = reprintPending; reprintPending = 0;
   if (!lastValid || !lastJob) { logEvent("Nothing to reprint yet (labels are remembered from when a button was set to Reprint, until the board restarts)"); return; }
-  bool ok = printerWrite(lastJob, lastLen);
-  if (ok) jobsPrinted++;
-  logEvent(ok ? "Reprinted the last label, " + String(lastLen) + " bytes" : String("Reprint FAILED (printer not ready)"));
+  int done = 0;
+  for (int k = 0; k < n; k++) { if (!printerWrite(lastJob, lastLen)) break; jobsPrinted++; done++; }
+  if (done == n) logEvent("Reprinted the last label" + (n > 1 ? String(" x") + String(n) : String("")) + ", " + String(lastLen) + " bytes");
+  else logEvent("Reprint FAILED after " + String(done) + " of " + String(n) + " (printer not ready)");
 }
 
 void startFlier(int n, int copies) {
@@ -428,27 +431,36 @@ void serviceFlierJob() {
 }
 
 void serviceButtons() {
-  static uint32_t downAt[FLIER_COUNT + 1] = {};
+  static uint32_t downAt[FLIER_COUNT + 1] = {}, upAt[FLIER_COUNT + 1] = {};
+  static int clicks[FLIER_COUNT + 1] = {};
   static bool held[FLIER_COUNT + 1] = {};
   static uint32_t lastAction = 0;
   // Wired buttons: GPIO pins. Each does what it's set to on the page (btnAct): by default
-  // button N prints flier N. Press = 1 copy, hold 2 s = that flier's batch.
-  auto act = [&](int i, bool hold) {
+  // button N prints flier N. The button already says which flier, so its clicks say how many:
+  // click 3 times = 3 copies (up to MAX_CLICKS). Hold 2 s = that flier's batch. Press while
+  // printing = stop. (The BOOT button below is different: its clicks pick the flier.)
+  auto act = [&](int i, bool hold, int count) {
     int a = btnAct[i];
     if (a == ACT_STOP) stopFlier();
-    else if (a == ACT_REPRINT) reprintPending = true;
-    else startFlier(a, hold ? flierBatch[constrain(a, 1, FLIER_COUNT)] : 1);
+    else if (a == ACT_REPRINT) reprintPending = min(reprintPending + count, MAX_CLICKS);
+    else startFlier(a, hold ? flierBatch[constrain(a, 1, FLIER_COUNT)] : count);
   };
   for (int i = 1; i <= FLIER_COUNT; i++) {
     bool down = digitalRead(flierPins[i - 1]) == LOW;
     if (down && !downAt[i]) {                       // just pressed
       downAt[i] = millis(); held[i] = false;
-      if (jobLeft && millis() - lastAction > 500) { stopFlier(); held[i] = true; lastAction = millis(); }  // any press stops a batch
+      if (jobLeft && millis() - lastAction > 500) { stopFlier(); held[i] = true; clicks[i] = 0; lastAction = millis(); }  // any press stops a batch
     } else if (down && !held[i] && millis() - downAt[i] > 2000) {   // held 2 s: batch
-      held[i] = true; lastAction = millis(); act(i, true);
-    } else if (!down && downAt[i]) {                // released
-      if (!held[i] && millis() - downAt[i] > 30 && millis() - lastAction > 500) { lastAction = millis(); act(i, false); }
+      held[i] = true; clicks[i] = 0; lastAction = millis(); act(i, true, 1);
+    } else if (!down && downAt[i]) {                // released: count the click
+      if (!held[i] && millis() - downAt[i] > 30) {
+        if (clicks[i] < MAX_CLICKS) clicks[i]++;
+        upAt[i] = millis(); blinkUntil = millis() + 120;
+      }
       downAt[i] = 0;
+    }
+    if (!down && clicks[i] && millis() - upAt[i] > 600) {   // clicking finished
+      lastAction = millis(); act(i, false, clicks[i]); clicks[i] = 0;
     }
   }
   // The board's BOOT button (GPIO 0) counts clicks: 1 to FLIER_COUNT quick clicks = that flier
@@ -465,7 +477,7 @@ void serviceButtons() {
     bHeld = true; lastAction = millis();
     startFlier(min(bClicks + 1, FLIER_COUNT), flierBatch[min(bClicks + 1, FLIER_COUNT)]); bClicks = 0;
   } else if (!d && bDown) {
-    if (!bHeld && millis() - bDown > 30) { bClicks++; bLastUp = millis(); }
+    if (!bHeld && millis() - bDown > 30) { bClicks++; bLastUp = millis(); blinkUntil = millis() + 120; }
     bDown = 0;
   }
   if (!d && bClicks && millis() - bLastUp > 600) {   // clicking finished
@@ -476,7 +488,8 @@ void serviceButtons() {
 extern bool setupMode;
 void updateLed() {
   const uint8_t L = LED_BRIGHTNESS;
-  if (setupMode) ledSet(L / 2, 0, L);                              // purple: setup mode
+  if (millis() < blinkUntil) ledSet(L, L, L);                      // white flash: a button click was counted
+  else if (setupMode) ledSet(L / 2, 0, L);                         // purple: setup mode
   else if (!printerReady || printerTrouble) ledSet(L, 0, 0);       // red: no printer, or it stopped responding
   else if (jobLeft) ledSet(0, 0, L);                               // blue: printing
   else if (captureSlot && millis() < captureUntil) ledSet(L, L * 2 / 3, 0);  // yellow: waiting to save a flier
@@ -1272,7 +1285,8 @@ void handleRoot() {
     h += "</div>";
     if (fsReady) h += FPSTR(COPY_TOOL);
     h += "<div class=card><b>Extra buttons</b> <small>(optional)</small><br><small>Wire a push button between the pin shown and <b>GND</b>. No resistors needed. "
-         "Press = 1 copy, hold 2 seconds = that flier's batch, press any button to stop a batch.</small><form method=post action=/buttons>";
+         "Click to print: click 3 times for 3 copies (up to " + String(MAX_CLICKS) + "). The light flashes white for each click it counts. "
+         "Hold 2 seconds = that flier's batch. Press any button to stop. (The board's BOOT button is different: its clicks pick the flier.)</small><form method=post action=/buttons>";
     for (int i = 1; i <= FLIER_COUNT; i++) {
       h += "<div style=\"display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px\"><small style=\"min-width:150px\">Button " + String(i) + " (GPIO " + String(flierPins[i - 1]) + ")</small>"
            "<select name=a" + String(i) + " style=\"flex:1;min-width:180px;padding:10px;border:1px solid #ccc;border-radius:8px;font:inherit\" aria-label=\"What button " + String(i) + " does\">";

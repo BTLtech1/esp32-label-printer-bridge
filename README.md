@@ -117,7 +117,7 @@ Copies go into the same click slots and replace what was there.
 
 ### Optional: your own buttons
 
-Want real buttons? Wire any momentary push button (arcade buttons, big dome buttons, tactile switches, or mechanical keyboard switches in a 3D-printed case) with two wires: one to its pin, one to **GND**. No resistors needed, and female-to-female jumper wires push onto the board's pins, so no soldering if your buttons have wire leads. Press = 1 copy, hold 2 seconds = batch, press again to stop.
+Want real buttons? Wire any momentary push button (arcade buttons, big dome buttons, tactile switches, or mechanical keyboard switches in a 3D-printed case) with two wires: one to its pin, one to **GND**. No resistors needed, and female-to-female jumper wires push onto the board's pins, so no soldering if your buttons have wire leads. Click for copies: 3 clicks = 3 copies (up to 20); the status light flashes white for each click it counts. Hold 2 seconds = batch, press again to stop. (The BOOT button is different: with only one button, its clicks pick the flier.)
 
 By default button 1 prints Flier 1 and so on. Under **Extra buttons** on the bridge's page you can set any button to print a different flier, **reprint the last label**, or **stop printing**. Reprint repeats the last label sent from a computer, the page or the order queue; while a button is set to it, the board keeps that one label in memory until it restarts.
 
