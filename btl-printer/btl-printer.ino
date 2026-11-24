@@ -34,7 +34,7 @@
 #include "config.h"
 #include "improv_serial.h"       // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.16.0"
+#define FIRMWARE_VERSION "1.16.1"
 ImprovSerial improv(Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -1274,6 +1274,8 @@ void handleRoot() {
   String h = FPSTR(PAGE_HEAD);
   h += "<div class=card id=st>" + statusHtml() + "</div>"
        "<script>setInterval(()=>fetch('/status').then(r=>r.text()).then(t=>document.getElementById('st').innerHTML=t).catch(()=>{}),3000)</script>";
+  // Firmware card right under the status, so a waiting update is the first thing you see
+  if (!setupMode) { String fw = FPSTR(FW_TOOL); fw.replace("%VER%", FIRMWARE_VERSION); h += fw; }
   if (!setupMode) {
     String ip = WiFi.localIP().toString();
     String cmd = "irm http://" + ip + "/windows.ps1 | iex";
@@ -1333,7 +1335,6 @@ void handleRoot() {
     h += "<button>Save buttons</button></form><small>Reprint repeats the last label sent from a computer, this page or the order queue. "
          "While a button is set to Reprint, the board keeps that one label in memory until it restarts.</small></div>";
   }
-  if (!setupMode) { String fw = FPSTR(FW_TOOL); fw.replace("%VER%", FIRMWARE_VERSION); h += fw; }
   h += "<div class=card><form method=post action=/save><b>Settings</b>"
        "<label>Wi-Fi name</label><input name=ssid value=\"" + htmlEsc(cfgSsid) + "\" required>"
        "<label>Wi-Fi password</label><input name=pass type=password placeholder=\"(unchanged)\">"
