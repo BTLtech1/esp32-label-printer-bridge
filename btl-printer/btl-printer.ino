@@ -34,7 +34,7 @@
 #include "config.h"
 #include "improv_serial.h"       // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.15.0"
+#define FIRMWARE_VERSION "1.16.0"
 ImprovSerial improv(Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -373,6 +373,7 @@ String flierLabel(int n) { return flierName[n].length() ? flierName[n] : "Flier 
 
 // Printing runs one copy per loop pass, so the page stays responsive and a button press can stop it.
 int jobFlier = 0, jobLeft = 0, jobDone = 0;
+bool cancelPending = false;             // send the printer's own "cancel jobs" once the current copy is done
 int flierBatch[FLIER_COUNT + 1];   // copies printed by holding the button
 
 // What each wired button does: 1..FLIER_COUNT = print that flier (the default is its own
@@ -413,11 +414,17 @@ void startFlier(int n, int copies) {
 }
 
 void stopFlier() {
-  if (jobLeft) logEvent("Stopped " + flierLabel(jobFlier) + " after " + String(jobDone) + " copies");
+  if (jobLeft) { logEvent("Stopped " + flierLabel(jobFlier) + " after " + String(jobDone) + " copies"); cancelPending = true; }
   jobLeft = 0;
 }
 
 void serviceFlierJob() {
+  if (cancelPending && !jobLeft) {
+    // ZPL printers (Rongta, Zebra-style) drop anything still queued in their memory on "~JA" (cancel all).
+    // Sent only between copies, never inside one: a half-sent label can leave a printer stuck.
+    cancelPending = false;
+    if (cfgLang == "zpl" && printerReady) printerWrite((const uint8_t *)"~JA\r\n", 5);
+  }
   if (!jobLeft) return;
   File f = FFat.open(flierPath(jobFlier));
   bool ok = (bool)f;
@@ -425,10 +432,13 @@ void serviceFlierJob() {
     int r = f.read(netBuf, sizeof netBuf);
     if (r <= 0) break;
     ok = printerWrite(netBuf, r);
+    serviceButtons();                    // a press during the copy is noticed; the copy still finishes whole
   }
   if (f) f.close();
   if (!ok) { logEvent(flierLabel(jobFlier) + " FAILED (printer not ready)"); jobLeft = 0; return; }
-  jobsPrinted++; jobDone++; jobLeft--;
+  jobsPrinted++; jobDone++;
+  if (!jobLeft) return;                  // stopped while this copy was going out (stopFlier logged it)
+  jobLeft--;
   if (!jobLeft) logEvent("Printed " + flierLabel(jobFlier) + (jobDone > 1 ? " x " + String(jobDone) : String("")));
 }
 
