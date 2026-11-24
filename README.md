@@ -4,6 +4,7 @@ Turn a cheap USB label printer into a **Wi-Fi printer** with a ~$10 ESP32-S3 boa
 
 - **Print from any computer over Wi-Fi.** Add the bridge as a normal network printer and keep using your printer's own driver. Every app's Print button works.
 - **Works with most cheap USB label printers.** The bridge doesn't need to understand your printer. It passes along exactly what your computer's driver sends (ZPL, TSPL, EPL, raster, whatever the printer uses).
+- **Stamp item codes onto shipping labels by hand** (for sites you haven't set up automatic labels for). Pick a PDF of 4×6 labels on the bridge's page, type a code like `G3` for each, print.
 - **Print text from the bridge's page.** Type a few words, see a preview sized to your label, print. No driver needed (ZPL or TSPL printers).
 - **Status light.** The board's colour LED shows green = ready, blue = printing, red = no printer, yellow = waiting to save a flier, purple = setup mode.
 - **Updates over Wi-Fi.** The bridge's page checks for new versions; click **Update now**, no cables needed.
@@ -88,6 +89,10 @@ POST {QUEUE_URL}/ack?id=<id>  Authorization: Bearer {TOKEN}   (sent after the jo
 ```
 
 Anything that can serve those two URLs works: a Cloudflare Worker, a small server, etc. Jobs must already be in your printer's language. Many shipping-label services (Shippo, EasyPost, ShipStation) can return labels as **ZPL**, which most 4×6 thermal printers understand. A job that fails to print isn't acknowledged, so it's retried.
+
+### No automatic labels yet? Stamp them by hand
+
+Selling on a site that isn't connected to automatic labels? Download that site's labels as a **4×6 PDF** and use **Stamp & print labels** on the bridge's page: pick the PDF, type an item code for each label (or one code for all), click a label to move where the code goes, and press **Print labels**. Your browser opens the PDF and sends each finished label only to the bridge (`POST /label`, a PNG picture); nothing goes anywhere else. The free [PDF.js](https://mozilla.github.io/pdf.js/) reader loads from cdnjs when you pick a file, so that computer needs internet.
 
 ## Updating
 

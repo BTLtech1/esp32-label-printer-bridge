@@ -34,7 +34,7 @@
 #include "config.h"
 #include "improv_serial.h"       // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.16.2"
+#define FIRMWARE_VERSION "1.17.0"
 ImprovSerial improv(Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -929,6 +929,75 @@ var f=new FormData();f.append('f',new Blob(job),'label.prn');$('tm').textContent
 fetch('/raw',{method:'POST',body:f}).then(function(r){return r.text()}).then(function(t){$('tm').textContent=t}).catch(function(){$('tm').textContent='Could not reach the bridge.'})};
 })();</script>)HTML";
 
+// "Stamp & print labels" card. The browser opens a PDF of 4x6 labels with the free PDF.js
+// reader (loaded from cdnjs only when a file is picked), draws the item code onto each label
+// and posts the finished picture to /label. The PDF never leaves this browser and this board.
+const char STAMP_TOOL[] PROGMEM = R"HTML(<div class=card><b>Stamp &amp; print labels</b> <small>(if you haven't set up automatic labels)</small><br><small>Automatic labels (the print queue in Settings) add item codes like <b>G3</b> by themselves.
+Selling somewhere that isn't set up for that yet? Download that site's labels as a 4x6 PDF, pick it here, type a code for each label, and print. The PDF is opened by this browser and sent only to this bridge, nowhere else.</small>
+<input type=file id=sf accept=".pdf,application/pdf" style="margin-top:10px">
+<div id=sx hidden>
+<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px"><span>All labels</span>
+<input id=sa placeholder=G3 maxlength=24 style="width:110px;text-transform:uppercase">
+<button id=sb type=button style="margin:0;background:#666">Set all</button><button id=se type=button style="margin:0;background:#666">Fill empty ones</button></div>
+<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px"><span>Text size</span><input id=sz type=range min=12 max=48 value=23 style="width:140px;padding:0"><small id=szv></small>
+<button id=sr type=button style="margin:0;background:#999">Reset spot</button></div>
+<small>Click on any label to move the code there (the right edge of the code goes where you click).</small>
+<div id=sg style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:10px"></div>
+<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button id=sp type=button>Print labels</button><button id=ss type=button style="background:#999" hidden>Stop</button><small id=sm></small></div></div>
+<small id=sn style="display:block;margin-top:8px"></small></div>
+<script>(function(){
+var $=function(i){return document.getElementById(i)},P=[],stop=false,busy=false,CDN='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+var DEF={x:790/812,y:390/1218};
+function st(k,v){try{if(v===undefined){var r=localStorage.getItem('btl_st_'+k);return r===null?null:JSON.parse(r)}localStorage.setItem('btl_st_'+k,JSON.stringify(v))}catch(e){return null}}
+var pos=st('pos')||{x:DEF.x,y:DEF.y},size=st('size')||23;$('sz').value=size;$('szv').textContent=size+' pt';
+function clean(v){return(v||'').toUpperCase().replace(/[^\x20-\x7E]/g,'').replace(/\s+/g,' ').trim().slice(0,24)}
+function load(u){return new Promise(function(ok,no){var s=document.createElement('script');s.src=u;s.onload=ok;s.onerror=no;document.head.appendChild(s)})}
+function libs(){return window.pdfjsLib?Promise.resolve():load(CDN+'pdf.min.js').then(function(){return load(CDN+'pdf.worker.min.js')})}
+function px(p){return size*Math.max(p.cv.width,p.cv.height)/432}
+function paint(p){var o=p.ov,r=p.cv.clientWidth/p.cv.width;o.textContent=p.code;o.style.display=p.code?'':'none';
+o.style.left=pos.x*100+'%';o.style.top=pos.y*100+'%';o.style.fontSize=px(p)*r+'px';p.in.style.borderColor=p.code?'':'#d9471f'}
+function all(){P.forEach(paint);var n=P.filter(function(p){return p.code}).length;
+$('sm').textContent=P.length?(n==P.length?'All '+P.length+' labels have a code.':n+' of '+P.length+' labels have a code. The rest print without one.'):''}
+function bw(cv){var x=cv.getContext('2d'),d=x.getImageData(0,0,cv.width,cv.height),a=d.data;
+for(var i=0;i<a.length;i+=4){var v=(a[i]*77+a[i+1]*150+a[i+2]*29)>>8<160?0:255;a[i]=a[i+1]=a[i+2]=v;a[i+3]=255}x.putImageData(d,0,0)}
+$('sf').onchange=function(){var f=this.files[0];if(!f)return;$('sn').textContent='Opening '+f.name+'...';
+libs().then(function(){return f.arrayBuffer()}).then(function(b){return pdfjsLib.getDocument({data:new Uint8Array(b)}).promise}).then(function(doc){
+P=[];$('sg').innerHTML='';$('sx').hidden=false;var i=1;
+function next(){if(i>doc.numPages){$('sn').textContent=doc.numPages+' label'+(doc.numPages>1?'s':'')+' from '+f.name;all();return}
+return doc.getPage(i).then(function(pg){var v1=pg.getViewport({scale:1}),vp=pg.getViewport({scale:1218/Math.max(v1.width,v1.height)});
+var cv=document.createElement('canvas');cv.width=Math.round(vp.width);cv.height=Math.round(vp.height);
+cv.style.cssText='display:block;width:100%;height:auto;cursor:crosshair';
+var box=document.createElement('div'),wrap=document.createElement('div'),ov=document.createElement('div'),inp=document.createElement('input');
+wrap.style.cssText='position:relative;border:1px solid #ccc;border-radius:4px;overflow:hidden;background:#fff';
+ov.style.cssText='position:absolute;transform:translateX(-100%);white-space:nowrap;pointer-events:none;font-weight:700;font-family:Arial,Helvetica,sans-serif;line-height:1;background:#fff;color:#000;outline:2px solid #fff';
+inp.placeholder='Label '+i+' code';inp.maxLength=24;inp.style.cssText='margin-top:6px;text-transform:uppercase;padding:8px';inp.setAttribute('aria-label','Code for label '+i);
+wrap.appendChild(cv);wrap.appendChild(ov);box.appendChild(wrap);box.appendChild(inp);$('sg').appendChild(box);
+var p={cv:cv,ov:ov,in:inp,code:''};P.push(p);var k=P.length;
+inp.oninput=function(){p.code=clean(inp.value);all()};
+inp.onkeydown=function(e){if(e.key=='Enter'){e.preventDefault();if(P[k])P[k].in.focus()}};
+cv.onclick=function(e){var r=cv.getBoundingClientRect();pos={x:Math.min(1,Math.max(0,(e.clientX-r.left)/r.width)),y:Math.min(1,Math.max(0,(e.clientY-r.top)/r.height))};st('pos',pos);all()};
+return pg.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise.then(function(){bw(cv);paint(p);i++;return next()})})}
+return next()}).catch(function(e){$('sn').textContent='Could not open that PDF'+(window.pdfjsLib?'':' (the PDF reader needs internet on this computer)')+'.'})};
+function setAll(only){var c=clean($('sa').value);P.forEach(function(p){if(!only||!p.code){p.code=c;p.in.value=c}});all()}
+$('sb').onclick=function(){setAll(false)};$('se').onclick=function(){setAll(true)};
+$('sa').onkeydown=function(e){if(e.key=='Enter'){e.preventDefault();setAll(true)}};
+$('sz').oninput=function(){size=+this.value;$('szv').textContent=size+' pt';st('size',size);all()};
+$('sr').onclick=function(){pos={x:DEF.x,y:DEF.y};st('pos',pos);all()};
+window.addEventListener('resize',function(){P.forEach(paint)});
+function stamped(p){var c=document.createElement('canvas');c.width=p.cv.width;c.height=p.cv.height;var x=c.getContext('2d');x.drawImage(p.cv,0,0);
+if(p.code){var s=px(p);x.font='700 '+s+'px Arial,Helvetica,sans-serif';x.textBaseline='top';var w=x.measureText(p.code).width,X=pos.x*c.width,Y=pos.y*c.height,pd=s*0.12;
+x.fillStyle='#fff';x.fillRect(X-w-pd,Y-pd,w+2*pd,s+2*pd);x.fillStyle='#000';x.textAlign='right';x.fillText(p.code,X,Y)}
+return new Promise(function(ok){c.toBlob(ok,'image/png')})}
+$('ss').onclick=function(){stop=true;$('sm').textContent='Stopping after this label...'};
+$('sp').onclick=function(){if(busy||!P.length)return;busy=true;stop=false;$('sp').disabled=true;$('ss').hidden=false;var i=0;
+function done(t){busy=false;$('sp').disabled=false;$('ss').hidden=true;$('sm').textContent=t}
+(function one(){if(stop)return done('Stopped after '+i+' of '+P.length+'.');if(i>=P.length)return done('Printed all '+P.length+'.');
+$('sm').textContent='Printing '+(i+1)+' of '+P.length+'...';
+stamped(P[i]).then(function(b){var f=new FormData();f.append('f',b,'label.png');return fetch('/label',{method:'POST',body:f})})
+.then(function(r){return r.text().then(function(t){if(!r.ok)throw t;i++;one()})})
+.catch(function(t){done('Label '+(i+1)+' did not print: '+(typeof t=='string'?t:'could not reach the bridge.'))})})()};
+})();</script>)HTML";
+
 // "Firmware" card: the browser checks GitHub for a newer version, downloads it over HTTPS and
 // uploads it to /update. A .bin file can also be uploaded by hand.
 // "Copy or back up fliers" card. The browser does the work: it reads each flier from this board
@@ -1301,6 +1370,7 @@ void handleRoot() {
          "<form method=post action=/test style=\"display:inline\"><button>Print ZPL test</button></form> "
          "<form method=post action=/test-tspl style=\"display:inline\"><button>Print TSPL test</button></form></div>";
     h += FPSTR(TEXT_TOOL);
+    h += FPSTR(STAMP_TOOL);
     h += "<div class=card><b>Saved fliers</b><br><small>To save one: click <b>Save next print here</b> under the flier you want, then print the flier from your computer to this printer "
          "within " + String(CAPTURE_MINUTES) + " minutes. It's stored instead of printed.<br>"
          "To print it: click the board's <b>BOOT</b> button 1 to " + String(FLIER_COUNT) + " times quickly for Flier 1 to " + String(FLIER_COUNT) + ". "
@@ -1467,6 +1537,39 @@ void handleRawDone() {
   else { logEvent("Label from the page FAILED (printer not ready)"); web.send(200, "text/plain", "Printer not ready."); }
 }
 
+// /label: a finished label picture (PNG) from the page's "Stamp & print labels" card. The code is
+// already drawn on it; it prints the same way as a shipping label from the order queue.
+uint8_t *lblBuf = nullptr; size_t lblLen = 0; bool lblBad = false;
+void handleLabelUpload() {
+  HTTPUpload &u = web.upload();
+  if (u.status == UPLOAD_FILE_START) { free(lblBuf); lblBuf = (uint8_t *)ps_malloc(MAX_JOB_BYTES); lblLen = 0; lblBad = !lblBuf; }
+  else if (u.status == UPLOAD_FILE_WRITE) {
+    if (!lblBad && lblLen + u.currentSize <= MAX_JOB_BYTES) { memcpy(lblBuf + lblLen, u.buf, u.currentSize); lblLen += u.currentSize; }
+    else lblBad = true;
+  } else if (u.status == UPLOAD_FILE_ABORTED) lblBad = true;
+}
+void handleLabelDone() {
+  String msg; bool ok = false;
+  if (!printerReady) msg = "Printer not ready.";
+  else if (lblBad || !lblBuf) msg = "The label was too big for the bridge.";
+  else if (!isPng(lblBuf, lblLen)) msg = "That isn't a label picture.";
+  else {
+    PngDec d;
+    String err = decodePngLabel(lblBuf, lblLen, d);
+    if (err.length()) msg = "Couldn't read the label (" + err + ").";
+    else { lastBegin(); ok = printLabelImage(d, "", ""); lastEnd(ok); msg = ok ? "Printed." : "The printer stopped responding."; }
+    freePng(d);
+  }
+  if (ok) {  // keep it for /lastlabel.png, trimmed to its real size
+    jobsPrinted++;
+    uint8_t *keep = (uint8_t *)ps_realloc(lblBuf, lblLen);
+    if (keep) { free(lastPng); lastPng = keep; lastPngLen = lblLen; lblBuf = nullptr; }
+  }
+  free(lblBuf); lblBuf = nullptr;
+  logEvent(ok ? String("Printed a stamped label from the page") : "Stamped label FAILED: " + msg);
+  web.send(ok ? 200 : 500, "text/plain", msg);
+}
+
 // /update: new firmware uploaded from the page (Wi-Fi update).
 String updErr; size_t updSeen = 0;
 void handleUpdateUpload() {
@@ -1570,6 +1673,7 @@ void setup() {
   web.on("/flier", HTTP_POST, handleFlier);
   web.on("/buttons", HTTP_POST, handleButtons);
   web.on("/raw", HTTP_POST, handleRawDone, handleRawUpload);
+  web.on("/label", HTTP_POST, handleLabelDone, handleLabelUpload);
   web.on("/update", HTTP_POST, handleUpdateDone, handleUpdateUpload);
   web.onNotFound([] { web.sendHeader("Location", "/"); web.send(302); });
   web.begin();
