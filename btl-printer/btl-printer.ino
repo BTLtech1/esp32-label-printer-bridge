@@ -34,7 +34,7 @@
 #include "config.h"
 #include "improv_serial.h"       // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.14.0"
+#define FIRMWARE_VERSION "1.15.0"
 ImprovSerial improv(Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -286,6 +286,8 @@ bool lastRec = false, lastFresh = false, lastOver = false, lastValid = false;
 volatile int reprintPending = 0;        // how many reprints a button asked for
 #define MAX_CLICKS 20                   // most copies a wired button counts (a bouncing key can't run off a roll)
 uint32_t blinkUntil = 0;                // status light flashes white while > millis(): one flash per counted click
+uint32_t redUntil = 0;                  // status light flashes red: a button asked for a flier slot that's empty
+bool booting = true;                    // still starting up (joining Wi-Fi): status light shows cyan
 
 bool printerWrite(const uint8_t *data, size_t len) {
   if (lastRec && lastJob) {
@@ -405,7 +407,7 @@ void serviceReprint() {
 
 void startFlier(int n, int copies) {
   if (n < 1 || n > FLIER_COUNT) return;
-  if (!flierSize(n)) { logEvent(flierLabel(n) + " is empty: save a print to it first"); return; }
+  if (!flierSize(n)) { redUntil = millis() + 700; logEvent(flierLabel(n) + " is empty: save a print to it first"); return; }
   if (!printerReady) { logEvent(flierLabel(n) + " FAILED (printer not ready)"); return; }
   jobFlier = n; jobLeft = constrain(copies, 1, 999); jobDone = 0;
 }
@@ -449,6 +451,7 @@ void serviceButtons() {
     bool down = digitalRead(flierPins[i - 1]) == LOW;
     if (down && !downAt[i]) {                       // just pressed
       downAt[i] = millis(); held[i] = false;
+      { char b[48]; snprintf(b, sizeof b, "Key %d pressed (GPIO %d)", i, flierPins[i - 1]); logNote(b); }
       if (jobLeft && millis() - lastAction > 500) { stopFlier(); held[i] = true; clicks[i] = 0; lastAction = millis(); }  // any press stops a batch
     } else if (down && !held[i] && millis() - downAt[i] > 2000) {   // held 2 s: batch
       held[i] = true; clicks[i] = 0; lastAction = millis(); act(i, true, 1);
@@ -489,6 +492,8 @@ extern bool setupMode;
 void updateLed() {
   const uint8_t L = LED_BRIGHTNESS;
   if (millis() < blinkUntil) ledSet(L, L, L);                      // white flash: a button click was counted
+  else if (millis() < redUntil) ledSet(L, 0, 0);                   // red flash: that flier slot is empty
+  else if (booting) ledSet(0, L / 2, L / 2);                       // cyan: starting up
   else if (setupMode) ledSet(L / 2, 0, L);                         // purple: setup mode
   else if (!printerReady || printerTrouble) ledSet(L, 0, 0);       // red: no printer, or it stopped responding
   else if (jobLeft) ledSet(0, 0, L);                               // blue: printing
@@ -960,6 +965,16 @@ return each(fl,function(f,i){m.textContent='Loading '+(i+1)+' of '+fl.length+'..
 .catch(say(m,"Couldn't load that file."))};
 })();</script>)HTML";
 
+// "Button test" card: shows each button lighting up live while you press it, straight from the pins.
+const char PIN_TOOL[] PROGMEM = R"HTML(<div class=card><b>Button test</b><br><small>Press each button: its box should turn green while it's held down and go grey when you let go.
+A box that never turns green means that button's wire isn't reaching its pin (or its ground side isn't connected). A box that stays green means that pin is touching ground all the time.</small>
+<div id=pt style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px"></div><small id=pm></small></div>
+<script>(function(){var box=document.getElementById('pt'),m=document.getElementById('pm');
+function cell(t,s,a){return '<div style="min-width:64px;padding:8px 6px;border-radius:8px;text-align:center;font-weight:700;background:'+(a?'#2e7d32':'#ddd')+';color:'+(a?'#fff':'#333')+'">'+t+'<br><small style="font-weight:400;color:inherit">'+s+'</small></div>'}
+function tick(){if(document.hidden){setTimeout(tick,1000);return}fetch('/pins',{cache:'no-store'}).then(function(r){return r.json()}).then(function(j){
+var h=cell('BOOT','GPIO 0',j.boot);j.keys.forEach(function(k,i){h+=cell('Key '+(i+1),'GPIO '+j.pins[i],k)});box.innerHTML=h;m.textContent='';setTimeout(tick,150)})
+.catch(function(){m.textContent='Lost contact with the board, retrying...';setTimeout(tick,1000)})}tick();})();</script>)HTML";
+
 const char LOG_TOOL[] PROGMEM = R"HTML(<div class=card><b>Troubleshooting log</b><br><small>Something not working? Click <b>Copy log</b> and paste it into your message when you ask for help.
 It has no passwords, no Wi-Fi name and nothing from your labels. It starts fresh each time the board restarts, so copy it before unplugging.</small><br>
 <button id=lc type=button>Copy log</button> <button id=lr type=button style="background:#666">Refresh</button> <small id=lm></small>
@@ -1206,6 +1221,16 @@ void handleButtons() {
   web.send(303);
 }
 
+// Live state of every button pin, for the "Button test" card: 1 = pressed (pin pulled to GND).
+void handlePins() {
+  String j = "{\"boot\":" + String(digitalRead(0) == LOW ? 1 : 0) + ",\"keys\":[";
+  for (int i = 0; i < FLIER_COUNT; i++) j += String(i ? "," : "") + String(digitalRead(flierPins[i]) == LOW ? 1 : 0);
+  j += "],\"pins\":[";
+  for (int i = 0; i < FLIER_COUNT; i++) j += String(i ? "," : "") + String(flierPins[i]);
+  web.sendHeader("Cache-Control", "no-store");
+  web.send(200, "application/json", j + "]}");
+}
+
 // Plain text made for pasting into a bug report.
 void handleLog() {
   String t = "BTL Print Bridge log\n";
@@ -1309,6 +1334,7 @@ void handleRoot() {
        "<option value=zpl" + String(cfgLang == "zpl" ? " selected" : "") + ">ZPL (Zebra, RONGTA, most 4x6 printers)</option>"
        "<option value=tspl" + String(cfgLang == "tspl" ? " selected" : "") + ">TSPL (Rollo and many budget label printers)</option></select>"
        "<button>Save and restart</button></form></div>";
+  h += FPSTR(PIN_TOOL);
   h += FPSTR(LOG_TOOL);
   web.send(200, "text/html", h);
 }
@@ -1469,7 +1495,8 @@ void startWifi() {
   WiFi.setHostname(hostName.c_str());
   WiFi.begin(cfgSsid.c_str(), cfgPass.c_str());
   uint32_t t0 = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - t0 < 20000) delay(250);
+  // Saved fliers don't need Wi-Fi, so keep the buttons working while it connects.
+  while (WiFi.status() != WL_CONNECTED && millis() - t0 < 20000) { serviceButtons(); serviceFlierJob(); updateLed(); delay(10); }
   if (WiFi.status() != WL_CONNECTED) { logEvent("Couldn't join " + cfgSsid); startSetupMode(); return; }
   WiFi.setSleep(false);  // keeps network printing responsive
   MDNS.begin(hostName.c_str());
@@ -1505,9 +1532,11 @@ void setup() {
   xTaskCreatePinnedToCore(usbHostTask, "usbhost", 4096, nullptr, 5, nullptr, 0);
   xTaskCreatePinnedToCore(usbClientTask, "usbclient", 6144, nullptr, 5, nullptr, 0);
   startWifi();
+  booting = false;
   web.on("/", handleRoot);
   web.on("/status", handleStatus);
   web.on("/log", handleLog);
+  web.on("/pins", handlePins);
   web.on("/fliers.json", handleFliersJson);
   web.on("/flier-file", handleFlierFile);
   web.on("/flier-put", HTTP_POST, handleFlierPutDone, handleFlierPutUpload);
