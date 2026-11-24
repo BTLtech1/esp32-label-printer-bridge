@@ -34,7 +34,7 @@
 #include "config.h"
 #include "improv_serial.h"       // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.16.1"
+#define FIRMWARE_VERSION "1.16.2"
 ImprovSerial improv(Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -374,6 +374,11 @@ String flierLabel(int n) { return flierName[n].length() ? flierName[n] : "Flier 
 // Printing runs one copy per loop pass, so the page stays responsive and a button press can stop it.
 int jobFlier = 0, jobLeft = 0, jobDone = 0;
 bool cancelPending = false;             // send the printer's own "cancel jobs" once the current copy is done
+// The board hands a whole batch to the printer in a few seconds, but the printer takes far longer to print
+// it. Until it has probably finished (about 3 s a copy, at most 3 min), any button press cancels the rest
+// instead of starting a new print.
+uint32_t drainUntil = 0;
+bool batchBusy() { return jobLeft || millis() < drainUntil; }
 int flierBatch[FLIER_COUNT + 1];   // copies printed by holding the button
 
 // What each wired button does: 1..FLIER_COUNT = print that flier (the default is its own
@@ -415,7 +420,8 @@ void startFlier(int n, int copies) {
 
 void stopFlier() {
   if (jobLeft) { logEvent("Stopped " + flierLabel(jobFlier) + " after " + String(jobDone) + " copies"); cancelPending = true; }
-  jobLeft = 0;
+  else if (millis() < drainUntil) { logEvent("Stopped: told the printer to drop the copies of " + flierLabel(jobFlier) + " it still had"); cancelPending = true; }
+  jobLeft = 0; drainUntil = 0;
 }
 
 void serviceFlierJob() {
@@ -439,6 +445,7 @@ void serviceFlierJob() {
   jobsPrinted++; jobDone++;
   if (!jobLeft) return;                  // stopped while this copy was going out (stopFlier logged it)
   jobLeft--;
+  if (!jobLeft && jobDone > 1) drainUntil = millis() + min(jobDone * 3000UL, 180000UL);
   if (!jobLeft) logEvent("Printed " + flierLabel(jobFlier) + (jobDone > 1 ? " x " + String(jobDone) : String("")));
 }
 
@@ -462,7 +469,7 @@ void serviceButtons() {
     if (down && !downAt[i]) {                       // just pressed
       downAt[i] = millis(); held[i] = false;
       { char b[48]; snprintf(b, sizeof b, "Key %d pressed (GPIO %d)", i, flierPins[i - 1]); logNote(b); }
-      if (jobLeft && millis() - lastAction > 500) { stopFlier(); held[i] = true; clicks[i] = 0; lastAction = millis(); }  // any press stops a batch
+      if (batchBusy() && millis() - lastAction > 500) { stopFlier(); held[i] = true; clicks[i] = 0; lastAction = millis(); }  // any press stops a batch
     } else if (down && !held[i] && millis() - downAt[i] > 2000) {   // held 2 s: batch
       held[i] = true; clicks[i] = 0; lastAction = millis(); act(i, true, 1);
     } else if (!down && downAt[i]) {                // released: count the click
@@ -485,7 +492,7 @@ void serviceButtons() {
   bool d = digitalRead(0) == LOW;
   if (d && !bDown) {
     bDown = millis(); bHeld = false;
-    if (jobLeft) { stopFlier(); bHeld = true; bClicks = 0; lastAction = millis(); }
+    if (batchBusy()) { stopFlier(); bHeld = true; bClicks = 0; lastAction = millis(); }
   } else if (d && !bHeld && millis() - bDown > 2000) {
     bHeld = true; lastAction = millis();
     startFlier(min(bClicks + 1, FLIER_COUNT), flierBatch[min(bClicks + 1, FLIER_COUNT)]); bClicks = 0;
@@ -506,7 +513,7 @@ void updateLed() {
   else if (booting) ledSet(0, L / 2, L / 2);                       // cyan: starting up
   else if (setupMode) ledSet(L / 2, 0, L);                         // purple: setup mode
   else if (!printerReady || printerTrouble) ledSet(L, 0, 0);       // red: no printer, or it stopped responding
-  else if (jobLeft) ledSet(0, 0, L);                               // blue: printing
+  else if (batchBusy()) ledSet(0, 0, L);                           // blue: printing (any button stops it)
   else if (captureSlot && millis() < captureUntil) ledSet(L, L * 2 / 3, 0);  // yellow: waiting to save a flier
   else ledSet(0, L * 2 / 3, 0);                                    // green: ready
 }
