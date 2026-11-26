@@ -34,7 +34,7 @@
 #include "config.h"
 #include "improv_serial.h"       // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.17.1"
+#define FIRMWARE_VERSION "1.17.2"
 ImprovSerial improv(Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -424,6 +424,20 @@ void stopFlier() {
   jobLeft = 0; drainUntil = 0;
 }
 
+// ZPL "^MNN" means continuous paper: gap sensing off. On die-cut labels each copy then starts a
+// little lower than the one before (top cut off, the next copy's top printed at the bottom). A label
+// driver set to "continuous" sends it with every job, and saved fliers keep it. This bridge is for
+// labels, so on ZPL printers it is turned into ^MNW (labels with gaps) on the way to the printer.
+struct MediaFix { uint8_t m = 0; uint32_t fixed = 0; };
+void fixZplMedia(uint8_t *b, int n, MediaFix &s) {
+  if (cfgLang != "zpl") return;
+  for (int i = 0; i < n; i++) {
+    uint8_t c = b[i];
+    if (s.m == 3) { if (c == 'N') { b[i] = 'W'; s.fixed++; } s.m = c == '^' ? 1 : 0; continue; }
+    s.m = c == '^' ? 1 : (s.m == 1 && c == 'M') ? 2 : (s.m == 2 && c == 'N') ? 3 : 0;
+  }
+}
+
 void serviceFlierJob() {
   if (cancelPending && !jobLeft) {
     // ZPL printers (Rongta, Zebra-style) drop anything still queued in their memory on "~JA" (cancel all).
@@ -434,9 +448,11 @@ void serviceFlierJob() {
   if (!jobLeft) return;
   File f = FFat.open(flierPath(jobFlier));
   bool ok = (bool)f;
+  MediaFix mf;
   while (ok) {
     int r = f.read(netBuf, sizeof netBuf);
     if (r <= 0) break;
+    fixZplMedia(netBuf, r, mf);
     ok = printerWrite(netBuf, r);
     serviceButtons();                    // a press during the copy is noticed; the copy still finishes whole
   }
@@ -527,11 +543,13 @@ void serviceRawPrinting() {
   if (slot) out = FFat.open("/capture.tmp", FILE_WRITE);
   size_t total = 0; bool ok = true;
   uint32_t lastData = millis();
+  MediaFix mf;
   if (!slot) lastBegin();
   while (c.connected() || c.available()) {
     int n = c.read(netBuf, sizeof netBuf);
     if (n > 0) {
       lastData = millis();
+      fixZplMedia(netBuf, n, mf);
       if (slot) { if (ok && out.write(netBuf, n) != (size_t)n) ok = false; }
       else if (ok && !printerWrite(netBuf, n)) ok = false;
       total += n;
@@ -542,6 +560,7 @@ void serviceRawPrinting() {
   }
   c.stop();
   lastEnd(ok && total);
+  if (mf.fixed) logNote("Changed continuous paper (^MNN) to labels with gaps in that job, so copies don't creep down");
   if (slot) {
     out.close();
     if (!total) return;  // just a connection check, keep waiting
