@@ -39,6 +39,7 @@ ImprovSerial improv(Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
 void logEvent(const String &s);
+struct MediaFix { uint8_t m = 0; uint32_t fixed = 0; };  // state for fixZplMedia(); defined up here so Arduino's generated prototypes see it
 bool restartSoon = false;
 uint32_t restartAt = 0;
 
@@ -428,7 +429,6 @@ void stopFlier() {
 // little lower than the one before (top cut off, the next copy's top printed at the bottom). A label
 // driver set to "continuous" sends it with every job, and saved fliers keep it. This bridge is for
 // labels, so on ZPL printers it is turned into ^MNW (labels with gaps) on the way to the printer.
-struct MediaFix { uint8_t m = 0; uint32_t fixed = 0; };
 void fixZplMedia(uint8_t *b, int n, MediaFix &s) {
   if (cfgLang != "zpl") return;
   for (int i = 0; i < n; i++) {
