@@ -34,7 +34,7 @@
 #include "config.h"
 #include "improv_serial.h"       // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.17.0"
+#define FIRMWARE_VERSION "1.17.1"
 ImprovSerial improv(Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -1346,6 +1346,25 @@ void handleLog() {
   web.send(200, "text/plain; charset=utf-8", t);
 }
 
+// Saved fliers: instant feedback. "Save next print here" is sent in the background so the page
+// doesn't reload (that took a few seconds and lost your place); the note under that flier says what
+// to do next, and the page reloads by itself once the flier is saved. Other flier buttons show
+// "Working..." straight away and come back to the same flier.
+#define WAIT_NOTE "Waiting: print the flier from your computer to this printer now. It will be saved here instead of printed."
+const char FLIER_JS[] PROGMEM = R"HTML(<script>(function(){var W=')HTML" WAIT_NOTE R"HTML(',poll=0;
+function watch(){if(poll)return;poll=setInterval(function(){fetch('/status').then(function(r){return r.text()}).then(function(t){
+if(t.indexOf('Waiting for your next print')<0){clearInterval(poll);poll=0;location.reload()}}).catch(function(){})},2000)}
+document.querySelectorAll('form.fl').forEach(function(f){f.addEventListener('submit',function(e){var b=e.submitter;if(!b)return;
+var d=new FormData(f);d.append(b.name,b.value);
+if(b.value=='save'){e.preventDefault();b.disabled=true;b.textContent='Saving...';
+fetch('/flier',{method:'POST',body:new URLSearchParams(d),redirect:'manual'}).then(function(){
+document.querySelectorAll('form.fl small[id^=fw]').forEach(function(s){s.textContent=''});
+document.querySelectorAll('form.fl .sv').forEach(function(x){x.textContent='Save next print here';x.disabled=false});
+b.textContent='Waiting for your print';b.disabled=true;document.getElementById('fw'+f.n.value).textContent=W;watch()})
+.catch(function(){b.disabled=false;b.textContent='Save next print here';alert('Could not reach the bridge. Try again.')});return}
+setTimeout(function(){b.disabled=true;b.textContent='Working...'},0)})});
+if(document.querySelector('form.fl small[id^=fw]:not(:empty)'))watch()})()</script>)HTML";
+
 void handleRoot() {
   String h = FPSTR(PAGE_HEAD);
   h += "<div class=card id=st>" + statusHtml() + "</div>"
@@ -1380,7 +1399,7 @@ void handleRoot() {
     for (int n = 1; n <= FLIER_COUNT; n++) {
       size_t z = flierSize(n);
       String dis = z ? "" : " disabled";
-      h += "<form method=post action=/flier style=\"margin-top:14px;border-top:1px solid #ddd;padding-top:10px\"><input type=hidden name=n value=" + String(n) + ">"
+      h += "<form method=post action=/flier class=fl id=f" + String(n) + " style=\"margin-top:14px;border-top:1px solid #ddd;padding-top:10px\"><input type=hidden name=n value=" + String(n) + ">"
            "<b>Flier " + String(n) + "</b> <small>(" + String(n) + (n == 1 ? " click" : " clicks") + ")</small>: " + (z ? htmlEsc(flierLabel(n)) + " <small>(" + String(z / 1024 + 1) + " KB)</small>" : String("<small>empty</small>")) +
            "<div style=\"display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px\">"
            "<input name=copies type=number min=1 max=999 value=1 style=\"width:80px\"" + dis + " aria-label=\"Copies to print now\"> "
@@ -1390,12 +1409,14 @@ void handleRoot() {
            "<small>copies</small><button name=do value=rename style=\"margin:0;background:#666\">Save</button></div>"
            "<label>Name</label><input name=name maxlength=30 placeholder=\"e.g. Menu\" value=\"" + htmlEsc(flierName[n]) + "\">"
            "<button name=do value=rename style=\"background:#666\">Save name</button> "
-           "<button name=do value=save style=\"background:#2563c9\">Save next print here</button> "
+           "<button name=do value=save class=sv style=\"background:#2563c9\">Save next print here</button> "
            "<button name=do value=delete style=\"background:#999\"" + dis + ">Delete flier</button>"
            "<div style=\"display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px\"><small>Move to:</small>"
            "<select name=to style=\"padding:10px;border:1px solid #ccc;border-radius:8px;font:inherit\"" + dis + " aria-label=\"Slot to move this flier to\">" + moveOptions(n) + "</select>"
-           "<button name=do value=move style=\"margin:0;background:#666\"" + dis + ">Move</button></div></form>";
+           "<button name=do value=move style=\"margin:0;background:#666\"" + dis + ">Move</button></div>"
+           "<small class=ok id=fw" + String(n) + ">" + (captureSlot == n && millis() < captureUntil ? String(WAIT_NOTE) : String("")) + "</small></form>";
     }
+    h += FPSTR(FLIER_JS);
     h += "</div>";
     if (fsReady) h += FPSTR(COPY_TOOL);
     h += "<div class=card><b>Extra buttons</b> <small>(optional)</small><br><small>Wire a push button between the pin shown and <b>GND</b>. No resistors needed. "
@@ -1519,7 +1540,7 @@ void handleFlier() {
       if (act == "rename") logEvent("Saved settings for " + flierLabel(n));
     }
   }
-  web.sendHeader("Location", "/");
+  web.sendHeader("Location", n >= 1 && n <= FLIER_COUNT ? "/#f" + String(n) : String("/"));  // back to the same flier
   web.send(303);
 }
 
