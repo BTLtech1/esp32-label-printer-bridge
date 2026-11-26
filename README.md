@@ -26,11 +26,17 @@ No app, no cloud account, no AI needed. Made by [BTL](https://btlstore.com).
 
 **Wiring:** printer → adapter → the board's port labeled **USB** (sometimes "OTG"). Power the board from its other port, labeled **COM** (sometimes "UART").
 
-## Easiest: install from your browser
+## Install the firmware (pick one way)
+
+You only do this once. After that, updates happen from the bridge's own page over Wi-Fi.
+
+### Way 1, easiest: from your browser (about 2 minutes)
 
 Open **https://btltech1.github.io/esp32-label-printer-bridge** in Chrome or Edge, plug in the board's COM port, and click **Install**. Not sure which port is the board? Unplug it and click Install again: the entry that disappears is the board.
 
-## Flash the firmware with Arduino IDE (one time, about 15 minutes)
+**Worked? Skip Way 2 and go to [Set it up](#set-it-up).**
+
+### Way 2, only if Way 1 doesn't work: Arduino IDE (about 15 minutes)
 
 1. Install the free **Arduino IDE** (arduino.cc/en/software).
 2. **File → Preferences → Additional boards manager URLs**, add:
@@ -52,7 +58,7 @@ Open **https://btltech1.github.io/esp32-label-printer-bridge** in Chrome or Edge
 
 1. On first start the bridge creates a Wi-Fi network called **BTL-Printer-Setup**. Join it with your phone or computer. A setup page should open by itself; if not, go to `http://192.168.4.1`.
 2. Enter your Wi-Fi name and password (it must be a **2.4 GHz** network) and save. The bridge restarts and joins your Wi-Fi.
-3. Open the bridge's page: **http://btl-printer-XXXX.local**, where XXXX is unique to your board (it's shown in the Serial Monitor and on the page), or just use its IP address. You'll see whether the printer is connected.
+3. Open the bridge's page: **http://btl-printer-XXXX.local**, where XXXX is unique to your board (don't know it? The next step, Add it to your computer, finds it for you; it's also in your router's device list, and in the Arduino Serial Monitor if you used Way 2), or just use its IP address. You'll see whether the printer is connected.
 4. In your router settings, give the bridge a **fixed IP address** (often called "DHCP reservation") so your computer can always find it.
 
 ## Add it to your computer
