@@ -34,7 +34,7 @@
 #include "config.h"
 #include "improv_serial.h"       // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.17.2"
+#define FIRMWARE_VERSION "1.17.3"
 ImprovSerial improv(Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -910,7 +910,7 @@ const char PAGE_HEAD[] PROGMEM = R"HTML(<!doctype html><meta charset="utf-8"><me
 <title>BTL Print Bridge</title><style>body{font:16px system-ui,sans-serif;max-width:560px;margin:24px auto;padding:0 16px;color:#16181d;background:#f3f2ef}
 h1{font-size:24px}.card{background:#fff;border:1px solid #ddd;border-radius:10px;padding:16px;margin:12px 0}label{display:block;margin:10px 0 4px;font-weight:600}
 input{width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box;font:inherit}button{margin-top:14px;padding:12px 18px;border:0;border-radius:8px;background:#d9471f;color:#fff;font:600 16px system-ui;cursor:pointer}button[disabled]{opacity:.4;cursor:default}
-.ok{color:#137333;font-weight:600}.bad{color:#b3261e;font-weight:600}small{color:#666}code{background:#eee;padding:2px 5px;border-radius:4px}</style><h1>BTL Print Bridge</h1>)HTML";
+.ok{color:#137333;font-weight:600}.bad{color:#b3261e;font-weight:600}small{color:#666}.fl{background:#f6f5f1;border:2px solid #cfcbc2;border-radius:12px;padding:12px 14px;margin-top:14px}.fl>b:first-of-type{font-size:18px}code{background:#eee;padding:2px 5px;border-radius:4px}</style><h1>BTL Print Bridge</h1>)HTML";
 
 // "Print text" card: the browser draws the text, turns it into a black-and-white image and
 // sends it in the printer's language (ZPL or TSPL) to /raw, which streams it to the printer.
@@ -1418,7 +1418,7 @@ void handleRoot() {
     for (int n = 1; n <= FLIER_COUNT; n++) {
       size_t z = flierSize(n);
       String dis = z ? "" : " disabled";
-      h += "<form method=post action=/flier class=fl id=f" + String(n) + " style=\"margin-top:14px;border-top:1px solid #ddd;padding-top:10px\"><input type=hidden name=n value=" + String(n) + ">"
+      h += "<form method=post action=/flier class=fl id=f" + String(n) + "><input type=hidden name=n value=" + String(n) + ">"
            "<b>Flier " + String(n) + "</b> <small>(" + String(n) + (n == 1 ? " click" : " clicks") + ")</small>: " + (z ? htmlEsc(flierLabel(n)) + " <small>(" + String(z / 1024 + 1) + " KB)</small>" : String("<small>empty</small>")) +
            "<div style=\"display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px\">"
            "<input name=copies type=number min=1 max=999 value=1 style=\"width:80px\"" + dis + " aria-label=\"Copies to print now\"> "
