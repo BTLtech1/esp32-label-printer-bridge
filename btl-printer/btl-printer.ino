@@ -35,7 +35,7 @@
 #include "config.h"
 #include "improv_serial.h"       // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.18.0"
+#define FIRMWARE_VERSION "1.18.1"
 ImprovSerial improv(Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -921,7 +921,7 @@ const char PAGE_HEAD[] PROGMEM = R"HTML(<!doctype html><meta charset="utf-8"><me
 <title>BTL Print Bridge</title><style>body{font:16px system-ui,sans-serif;max-width:560px;margin:24px auto;padding:0 16px;color:#16181d;background:#f3f2ef}
 h1{font-size:24px}.card{background:#fff;border:1px solid #ddd;border-radius:10px;padding:16px;margin:12px 0}label{display:block;margin:10px 0 4px;font-weight:600}
 input{width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box;font:inherit}button{margin-top:14px;padding:12px 18px;border:0;border-radius:8px;background:#d9471f;color:#fff;font:600 16px system-ui;cursor:pointer}button[disabled]{opacity:.4;cursor:default}
-.ok{color:#137333;font-weight:600}.bad{color:#b3261e;font-weight:600}small{color:#666}.fl{background:#f6f5f1;border:2px solid #cfcbc2;border-radius:12px;padding:12px 14px;margin-top:14px}.fl>b:first-of-type{font-size:18px}code{background:#eee;padding:2px 5px;border-radius:4px}</style><h1>BTL Print Bridge</h1>)HTML";
+.ok{color:#137333;font-weight:600}.bad{color:#b3261e;font-weight:600}small{color:#666}.fl{background:#f6f5f1;border:2px solid #cfcbc2;border-radius:12px;padding:12px 14px;margin-top:14px}.fl>b:first-of-type{font-size:18px}code{background:#eee;padding:2px 5px;border-radius:4px}:root{color-scheme:light dark}@media(prefers-color-scheme:dark){body{background:#121417;color:#eceef1}.card{background:#1b1e23;border-color:#2e333a}.fl{background:#22262c;border-color:#3a4048}small{color:#9aa1ab}code{background:#2e333a}input,textarea,select{background:#121417;color:#eceef1;border-color:#3a4048!important}.ok{color:#5fcf8f}.bad{color:#f08a5d}a{color:#f2c200}}</style><h1>BTL Print Bridge</h1>)HTML";
 
 // "Print text" card: the browser draws the text, turns it into a black-and-white image and
 // sends it in the printer's language (ZPL or TSPL) to /raw, which streams it to the printer.
@@ -976,7 +976,7 @@ Selling somewhere that isn't set up for that yet? Download that site's labels as
 <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button id=sp type=button>Print labels</button><button id=ss type=button style="background:#999" hidden>Stop</button><small id=sm></small></div></div>
 <small id=sn style="display:block;margin-top:8px"></small></div>
 <script>(function(){
-var $=function(i){return document.getElementById(i)},P=[],stop=false,busy=false,CDN='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+var $=function(i){return document.getElementById(i)},P=[],lastAll='',stop=false,busy=false,CDN='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
 var DEF={x:790/812,y:390/1218};
 function st(k,v){try{if(v===undefined){var r=localStorage.getItem('btl_st_'+k);return r===null?null:JSON.parse(r)}localStorage.setItem('btl_st_'+k,JSON.stringify(v))}catch(e){return null}}
 var pos=st('pos')||{x:DEF.x,y:DEF.y},size=st('size')||23;$('sz').value=size;$('szv').textContent=size+' pt';
@@ -987,7 +987,7 @@ function px(p){return size*Math.max(p.cv.width,p.cv.height)/432}
 function paint(p){var o=p.ov,r=p.cv.clientWidth/p.cv.width;o.textContent=p.code;o.style.display=p.code?'':'none';
 o.style.left=pos.x*100+'%';o.style.top=pos.y*100+'%';o.style.fontSize=px(p)*r+'px';p.in.style.borderColor=p.code?'':'#d9471f'}
 function all(){P.forEach(paint);var n=P.filter(function(p){return p.code}).length;
-$('sm').textContent=P.length?(n==P.length?'All '+P.length+' labels have a code.':n+' of '+P.length+' labels have a code. The rest print without one.'):''}
+$('sm').textContent=P.length?(n==P.length?(n==1?'The label has a code.':'All '+P.length+' labels have a code.'):n+' of '+P.length+' labels have a code. The rest print without one.'):''}
 function bw(cv){var x=cv.getContext('2d'),d=x.getImageData(0,0,cv.width,cv.height),a=d.data;
 for(var i=0;i<a.length;i+=4){var v=(a[i]*77+a[i+1]*150+a[i+2]*29)>>8<160?0:255;a[i]=a[i+1]=a[i+2]=v;a[i+3]=255}x.putImageData(d,0,0)}
 $('sf').onchange=function(){var f=this.files[0];if(!f)return;$('sn').textContent='Opening '+f.name+'...';
@@ -1008,8 +1008,9 @@ inp.onkeydown=function(e){if(e.key=='Enter'){e.preventDefault();if(P[k])P[k].in.
 cv.onclick=function(e){var r=cv.getBoundingClientRect();pos={x:Math.min(1,Math.max(0,(e.clientX-r.left)/r.width)),y:Math.min(1,Math.max(0,(e.clientY-r.top)/r.height))};st('pos',pos);all()};
 return pg.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise.then(function(){bw(cv);paint(p);i++;return next()})})}
 return next()}).catch(function(e){$('sn').textContent='Could not open that PDF'+(window.pdfjsLib?'':' (the PDF reader needs internet on this computer)')+'.'})};
-function setAll(only){var c=clean($('sa').value);P.forEach(function(p){if(!only||!p.code){p.code=c;p.in.value=c}});all()}
+function setAll(only){var c=clean($('sa').value);P.forEach(function(p){if(!only||!p.code){p.code=c;p.in.value=c}});lastAll=c;all()}
 $('sb').onclick=function(){setAll(false)};$('se').onclick=function(){setAll(true)};
+$('sa').oninput=function(){var c=clean(this.value);P.forEach(function(p){if(!p.code||p.code==lastAll){p.code=c;p.in.value=c}});lastAll=c;all()};
 $('sa').onkeydown=function(e){if(e.key=='Enter'){e.preventDefault();setAll(true)}};
 $('sz').oninput=function(){size=+this.value;$('szv').textContent=size+' pt';st('size',size);all()};
 $('sr').onclick=function(){pos={x:DEF.x,y:DEF.y};st('pos',pos);all()};
