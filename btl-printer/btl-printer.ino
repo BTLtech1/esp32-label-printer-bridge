@@ -24,6 +24,7 @@
 #include <FFat.h>
 #include <Update.h>
 #include "esp_system.h"
+#include "esp_task_wdt.h"
 #include "usb/usb_host.h"
 #include "png_label.h"
 #if __has_include("esp32s3/rom/miniz.h")
@@ -34,7 +35,7 @@
 #include "config.h"
 #include "improv_serial.h"       // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.17.3"
+#define FIRMWARE_VERSION "1.18.0"
 ImprovSerial improv(Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -128,6 +129,15 @@ static String upTime(uint32_t ms) {
   else snprintf(b, sizeof b, "%02u:%02u:%02u", (unsigned)(sec / 3600), (unsigned)(sec / 60 % 60), (unsigned)(sec % 60));
   return b;
 }
+
+// Freeze guard. If the main loop stops running for FREEZE_SECONDS (a bug, or a printer or network call
+// that never returns), the chip's watchdog restarts the board by itself, so the buttons and the page
+// come back without anyone unplugging it. `stage` says what the loop was doing; it is kept in memory
+// that survives that kind of restart, so the next log can say where it froze.
+#define FREEZE_SECONDS 180
+RTC_NOINIT_ATTR static char stage[28];
+RTC_NOINIT_ATTR static uint32_t stageMagic;
+static inline void at(const char *where) { strlcpy(stage, where, sizeof stage); stageMagic = 0xB71F00D5; esp_task_wdt_reset(); }
 
 static const char *restartReason() {
   switch (esp_reset_reason()) {
@@ -301,6 +311,7 @@ bool printerWrite(const uint8_t *data, size_t len) {
   bool ok = true;
   int tries = 0, waits = 0;
   while (len && ok && printerReady) {
+    esp_task_wdt_reset();                // slow but still trying: not a freeze (each try gives up by itself)
     // After a failed transfer, carry on in small pieces: gentler on a marginal cable or adapter.
     size_t n = len > USB_CHUNK_BYTES ? USB_CHUNK_BYTES : len;
     if (tries && n > 1024) n = 1024;
@@ -1626,6 +1637,7 @@ void handleUpdateUpload() {
       bool okImg = u.currentSize >= 36 && u.buf[0] == 0xE9 && u.buf[32] == 0x32 && u.buf[33] == 0x54 && u.buf[34] == 0xCD && u.buf[35] == 0xAB;
       if (!okImg) { updErr = "that isn't a BTL Print Bridge update file (use btl-print-bridge-update.bin)"; Update.abort(); return; }
     }
+    esp_task_wdt_reset();
     if (Update.write(u.buf, u.currentSize) != u.currentSize) updErr = Update.errorString();
     updSeen += u.currentSize;
   } else if (u.status == UPLOAD_FILE_END) {
@@ -1677,6 +1689,16 @@ void setup() {
   usbLock = xSemaphoreCreateMutex();
   loadSettings();
   logNote((String("Started, version " FIRMWARE_VERSION ". Last restart: ") + restartReason()).c_str());
+  { esp_reset_reason_t r = esp_reset_reason();
+    if ((r == ESP_RST_TASK_WDT || r == ESP_RST_INT_WDT || r == ESP_RST_WDT || r == ESP_RST_PANIC) && stageMagic == 0xB71F00D5) {
+      stage[sizeof stage - 1] = 0;
+      logNote((String("Before that restart it was: ") + stage).c_str());
+    }
+    esp_task_wdt_config_t wd = {.timeout_ms = FREEZE_SECONDS * 1000, .idle_core_mask = 0, .trigger_panic = true};
+    if (esp_task_wdt_reconfigure(&wd) != ESP_OK) esp_task_wdt_init(&wd);
+    esp_task_wdt_add(NULL);              // watch this (the main loop's) task
+    at("starting up");
+  }
   WiFi.onEvent([](WiFiEvent_t e, WiFiEventInfo_t info) {
     static bool up = false;
     if (e == ARDUINO_EVENT_WIFI_STA_GOT_IP) { if (!up) logNote("Wi-Fi: online"); up = true; }
@@ -1720,17 +1742,19 @@ void setup() {
 }
 
 void loop() {
+  at("idle");
   improv.handle();
   if (restartSoon && millis() > restartAt) ESP.restart();
   if (setupMode) dns.processNextRequest();
-  web.handleClient();
+  at("answering the page"); web.handleClient();
   updateLed();
   if (!setupMode) {
-    serviceRawPrinting();
-    serviceButtons();
-    serviceFlierJob();
-    serviceReprint();
-    pollQueue();
+    at("taking a print from the computer"); serviceRawPrinting();
+    at("reading the buttons"); serviceButtons();
+    at("printing a saved flier"); serviceFlierJob();
+    at("reprinting"); serviceReprint();
+    at("checking the order queue"); pollQueue();
+    at("idle");
     if (WiFi.status() != WL_CONNECTED) { static uint32_t lastTry = 0; if (millis() - lastTry > 30000) { lastTry = millis(); WiFi.reconnect(); } }
   }
   delay(1);
