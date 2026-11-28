@@ -35,7 +35,7 @@
 #include "config.h"
 #include "improv_serial.h"       // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.19.0"
+#define FIRMWARE_VERSION "1.19.1"
 ImprovSerial improv(Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -1465,6 +1465,14 @@ void handleRoot() {
   String h = FPSTR(PAGE_HEAD);
   h += "<div class=card id=st>" + statusHtml() + "</div>"
        "<script>setInterval(()=>fetch('/status').then(r=>r.text()).then(t=>document.getElementById('st').innerHTML=t).catch(()=>{}),3000)</script>";
+  if (!setupMode) {
+    // Each board's page gets its own name, so bookmarks for two boards are told apart
+    h.replace("<title>BTL Print Bridge</title>", "<title>BTL Print Bridge (" + hostName + ")</title>");
+    String ip = WiFi.localIP().toString();
+    h += "<p style=\"margin:-4px 4px 12px\"><small><b>Bookmark this page</b> (Ctrl+D; on a phone, Share &rarr; Add to Home Screen). "
+         "Its address never changes: <a href=\"http://" + hostName + ".local/\">" + hostName + ".local</a>. "
+         "If that doesn't open on a device (some Android phones), use <a href=\"http://" + ip + "/\">" + ip + "</a>, which can change if your router restarts.</small></p>";
+  }
   // Firmware card right under the status, so a waiting update is the first thing you see
   if (!setupMode) { String fw = FPSTR(FW_TOOL); fw.replace("%VER%", FIRMWARE_VERSION); h += fw; }
   if (!setupMode) {

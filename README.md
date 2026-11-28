@@ -61,6 +61,15 @@ Open **https://btltech1.github.io/esp32-label-printer-bridge** in Chrome or Edge
 3. Open the bridge's page: **http://btl-printer-XXXX.local**, where XXXX is unique to your board (don't know it? The next step, Add it to your computer, finds it for you; it's also in your router's device list, and in the Arduino Serial Monitor if you used Way 2), or just use its IP address. You'll see whether the printer is connected.
 4. In your router settings, give the bridge a **fixed IP address** (often called "DHCP reservation") so your computer can always find it.
 
+## Find your bridge's page
+
+The bridge has its own page in your browser. It's where you save fliers, see the status and update the bridge.
+
+- **Type its name into your browser's address bar:** `btl-printer-` plus 4 letters/numbers, then `.local`, for example `btl-printer-c854.local`. The name never changes.
+- **Don't know the name?** On the [install page](https://btltech1.github.io/esp32-label-printer-bridge), run the Windows line from Step 5: it finds every bridge on your Wi-Fi and opens its page. The bridges are also in your router's device list as **btl-printer-…**.
+- **Bookmark it** once it's open (**Ctrl+D**). On a phone, use **Share → Add to Home Screen**. Each bridge's page is named after it, so two bridges get two different bookmarks.
+- **The .local name doesn't open?** (some Android phones) Use the number address shown on the page instead, e.g. `192.168.1.50`. That one can change if your router restarts.
+
 ## Add it to your computer
 
 **Windows 10/11 (easiest, about 1 minute)**
