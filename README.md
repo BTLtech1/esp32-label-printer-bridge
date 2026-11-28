@@ -118,6 +118,10 @@ Store up to 7 print jobs on the bridge and print them with the board's **BOOT** 
 
 A flier is saved exactly as your printer's driver made it, so reprint it on the same kind of printer.
 
+**Or make a flier straight from a file:** under **Make a flier from a file** on the bridge's page, pick a PDF or a picture (PNG, JPG), set the label size, choose a slot and click **Save flier**. Each PDF page becomes one label. The file is converted in your browser using the printer language set under Settings, and goes only to the bridge.
+
+**Copying fliers to another board:** under **Copy or back up fliers**, tick the fliers you want, pick the board (the list shows which printer each board has) and click **Send fliers**. Before anything is replaced, it shows what's on that board in those slots.
+
 **Move, copy and back up.** On the bridge's page:
 
 - **Move to** under a flier puts it in a different click slot. If that slot is taken, the two swap.

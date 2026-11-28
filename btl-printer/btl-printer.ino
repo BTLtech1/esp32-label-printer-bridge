@@ -35,7 +35,7 @@
 #include "config.h"
 #include "improv_serial.h"       // Wi-Fi setup over USB from the web installer (Improv protocol)
 
-#define FIRMWARE_VERSION "1.18.1"
+#define FIRMWARE_VERSION "1.19.0"
 ImprovSerial improv(Serial);
 extern String cfgSsid, cfgPass;
 void saveSettings();
@@ -1029,19 +1029,74 @@ stamped(P[i]).then(function(b){var f=new FormData();f.append('f',b,'label.png');
 .catch(function(t){done('Label '+(i+1)+' did not print: '+(typeof t=='string'?t:'could not reach the bridge.'))})})()};
 })();</script>)HTML";
 
+// "Make a flier from a file" card. The browser turns a PDF (every page) or a picture into labels in the
+// printer's language, set under Settings, and stores them in a flier slot through /flier-put.
+// The file never leaves this browser and this board. PDF.js comes from cdnjs only when a PDF is picked.
+const char FILE_TOOL[] PROGMEM = R"HTML(<div class=card><b>Make a flier from a file</b><br><small>Pick a PDF or a picture (PNG, JPG). Each PDF page becomes one label. It's turned into black and white and saved in the slot you pick, ready for the buttons.</small>
+<input type=file id=uf accept=".pdf,application/pdf,image/png,image/jpeg,image/webp" style="margin-top:10px">
+<div id=ux hidden><div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px">
+<span>Label</span><input id=uw type=number step=0.1 min=0.5 value=4 style=width:70px><span>&times;</span><input id=uh type=number step=0.1 min=0.5 value=6 style=width:70px><span>in</span>
+<select id=ud style="padding:9px;border-radius:8px" title="Printer resolution"><option value=203>203 dpi</option><option value=300>300 dpi</option></select></div>
+<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px"><span>Save as</span><select id=us style="padding:9px;border-radius:8px"></select>
+<input id=un placeholder="Name" maxlength=30 style="flex:1;min-width:120px"></div>
+<div style="display:flex;gap:8px;align-items:center;margin-top:8px"><span>Darkness</span><input id=ut type=range min=60 max=230 value=160 style="width:140px;padding:0"></div>
+<div id=ug style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-top:10px"></div>
+<button id=uv type=button>Save flier</button> <small id=um></small></div></div>
+<script>(function(){
+var $=function(i){return document.getElementById(i)},CDN='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/',SRC=[],META={fliers:[]};
+function st(k,v){try{if(v===undefined)return localStorage.getItem('btl_u'+k);localStorage.setItem('btl_u'+k,v)}catch(e){return null}}
+['w','h','d'].forEach(function(k){var v=st(k);if(v)$('u'+k).value=v});
+function load(u){return new Promise(function(ok,no){var s=document.createElement('script');s.src=u;s.onload=ok;s.onerror=no;document.head.appendChild(s)})}
+function libs(){return window.pdfjsLib?Promise.resolve():load(CDN+'pdf.min.js').then(function(){return load(CDN+'pdf.worker.min.js')})}
+function slots(){fetch('/fliers.json',{cache:'no-store'}).then(function(r){return r.json()}).then(function(j){META=j;var s=$('us'),have={};s.textContent='';
+j.fliers.forEach(function(f){have[f.n]=f});for(var n=1;n<=7;n++){var o=document.createElement('option');o.value=n;o.textContent='Flier '+n+(have[n]?' (replaces '+(have[n].name||'what\'s there')+')':' (empty)');s.appendChild(o)}
+for(n=1;n<=7;n++)if(!have[n]){s.value=n;break}})}
+function size(){var dpi=+$('ud').value;return{dpi:dpi,W:Math.ceil(Math.round((parseFloat($('uw').value)||4)*dpi)/8)*8,H:Math.round((parseFloat($('uh').value)||6)*dpi)}}
+function draw(){var z=size(),g=$('ug');g.textContent='';SRC.forEach(function(src){var c=document.createElement('canvas');c.width=z.W;c.height=z.H;
+var x=c.getContext('2d'),sw=src.width,sh=src.height,rot=(sw>sh)!=(z.W>z.H);x.fillStyle='#fff';x.fillRect(0,0,z.W,z.H);x.save();
+if(rot){x.translate(z.W,0);x.rotate(Math.PI/2)}var aw=rot?z.H:z.W,ah=rot?z.W:z.H,k=Math.min(aw/sw,ah/sh);
+x.drawImage(src,(aw-sw*k)/2,(ah-sh*k)/2,sw*k,sh*k);x.restore();var d=x.getImageData(0,0,z.W,z.H),a=d.data,t=+$('ut').value;
+for(var i=0;i<a.length;i+=4){var v=(a[i]*77+a[i+1]*150+a[i+2]*29)>>8<t?0:255;a[i]=a[i+1]=a[i+2]=v;a[i+3]=255}x.putImageData(d,0,0);
+c.style.cssText='width:100%;border:1px solid #ccc;border-radius:4px;background:#fff';g.appendChild(c)})}
+function save(){['w','h','d'].forEach(function(k){st(k,$('u'+k).value)});draw()}
+['uw','uh','ud','ut'].forEach(function(i){$(i).addEventListener('input',save)});
+$('uf').onchange=function(){var f=this.files[0];if(!f)return;$('um').textContent='Opening '+f.name+'...';SRC=[];
+if(!$('un').value)$('un').value=f.name.replace(/\.[^.]+$/,'').slice(0,30);
+var go=/pdf$/i.test(f.type)||/\.pdf$/i.test(f.name)?libs().then(function(){return f.arrayBuffer()}).then(function(b){return pdfjsLib.getDocument({data:new Uint8Array(b)}).promise}).then(function(doc){
+var i=1;function next(){if(i>doc.numPages||i>20)return;return doc.getPage(i).then(function(pg){var v1=pg.getViewport({scale:1}),vp=pg.getViewport({scale:1800/Math.max(v1.width,v1.height)}),c=document.createElement('canvas');
+c.width=Math.round(vp.width);c.height=Math.round(vp.height);return pg.render({canvasContext:c.getContext('2d'),viewport:vp}).promise.then(function(){SRC.push(c);i++;return next()})})}return next()})
+:new Promise(function(ok,no){var im=new Image();im.onload=function(){SRC.push(im);ok()};im.onerror=no;im.src=URL.createObjectURL(f)});
+go.then(function(){$('ux').hidden=false;slots();draw();$('um').textContent=SRC.length+' label'+(SRC.length>1?'s':'')+' from '+f.name}).catch(function(){$('um').textContent='Could not open that file'+(window.pdfjsLib||!/pdf/i.test(f.name)?'':' (the PDF reader needs internet on this computer)')+'.'})};
+function job(){var z=size(),W=z.W,H=z.H,bpr=W/8,B=32,zpl=(META.lang||'zpl')!='tspl',out=[],mm=function(v){return(v*25.4).toFixed(1)};
+if(zpl)out.push('^XA^SZ2^JMA^MCY^PMN^PW'+W+'^MNW^LL'+H+'~JSN^JZY^LH0,0^LRN^XZ');
+[].forEach.call($('ug').children,function(c){var d=c.getContext('2d').getImageData(0,0,W,H).data,b=new Uint8Array(bpr*H);
+for(var y=0;y<H;y++)for(var i=0;i<W;i++)if(d[(y*W+i)*4]<128)b[y*bpr+(i>>3)]|=0x80>>(i&7);
+if(zpl){out.push('^XA^PW'+W+'^LL'+H+'^LH0,0');for(var y0=0;y0<H;y0+=B){var r=Math.min(B,H-y0),s=b.subarray(y0*bpr,(y0+r)*bpr);if(!s.some(function(v){return v}))continue;
+var h='';for(var j=0;j<s.length;j++)h+=(s[j]<16?'0':'')+s[j].toString(16);out.push('^FO0,'+y0+'^GFA,'+s.length+','+s.length+','+bpr+','+h.toUpperCase()+'^FS')}out.push('^XZ')}
+else{out.push('SIZE '+mm(W/z.dpi)+' mm,'+mm(H/z.dpi)+' mm\r\nGAP 3 mm,0 mm\r\nDIRECTION 0\r\nCLS\r\n');for(var y0=0;y0<H;y0+=B){var r=Math.min(B,H-y0),s=b.slice(y0*bpr,(y0+r)*bpr);
+if(!s.some(function(v){return v}))continue;for(var j=0;j<s.length;j++)s[j]^=0xFF;out.push('BITMAP 0,'+y0+','+bpr+','+r+',0,',s,'\r\n')}out.push('PRINT 1,1\r\n')}});
+return new Blob(out)}
+$('uv').onclick=function(){var n=+$('us').value,m=$('um'),btn=this,old=META.fliers.filter(function(f){return f.n==n})[0];if(!SRC.length)return;
+if(old&&!confirm('Replace Flier '+n+(old.name?' "'+old.name+'"':'')+' with this file?'))return;
+var d=new FormData();d.append('n',n);d.append('name',$('un').value);d.append('batch',old?old.batch:10);d.append('f',job(),'flier.bin');
+btn.disabled=true;m.textContent='Saving...';fetch('/flier-put',{method:'POST',body:d}).then(function(r){return r.text()}).then(function(t){if(t!=='ok')throw t;m.textContent='Saved as Flier '+n+'. Reloading...';setTimeout(function(){location.reload()},800)})
+.catch(function(t){m.textContent=typeof t=='string'?t:'Could not reach the bridge.';btn.disabled=false})};
+})();</script>)HTML";
+
 // "Firmware" card: the browser checks GitHub for a newer version, downloads it over HTTPS and
 // uploads it to /update. A .bin file can also be uploaded by hand.
 // "Copy or back up fliers" card. The browser does the work: it reads each flier from this board
 // (/flier-file) and posts it to another board's /flier-put, or packs them into one backup file.
 const char COPY_TOOL[] PROGMEM = R"HTML(<div class=card><b>Copy or back up fliers</b><br>
 <small>Copies go into the same click slots and replace what's there. Fliers only print correctly on the same kind of printer they were saved for.</small>
-<label>Send all fliers to another board</label>
+<label>Which fliers</label><div id=ck style="display:flex;flex-direction:column;gap:2px"><small>Loading&hellip;</small></div>
+<label>Send them to another board</label>
 <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><select id=cb style="flex:1;min-width:180px;padding:10px;border:1px solid #ccc;border-radius:8px;font:inherit"><option value="">Searching&hellip;</option></select>
 <button id=cf type=button style="margin:0;background:#666">Search again</button></div>
 <input id=ca placeholder="or type its address, e.g. 192.168.1.50" style="margin-top:8px" aria-label="Other board's address">
 <button id=cs type=button>Send fliers</button> <small id=cm></small>
 <label style="margin-top:16px">Backup file</label>
-<small>Save all fliers to one file on this computer, or load a saved file onto this board.</small><br>
+<small>Save the ticked fliers to one file on this computer, or load a saved file onto this board.</small><br>
 <button id=bd type=button style="background:#666">Download backup</button> <button id=br type=button style="background:#666">Restore backup</button>
 <input id=bf type=file accept=".btlfliers" hidden> <small id=bm></small></div>
 <script>(function(){
@@ -1052,21 +1107,31 @@ function put(base,f,blob){var d=new FormData();d.append('n',f.n);d.append('name'
 return fetch(base+'/flier-put',{method:'POST',body:d}).then(function(r){return r.text().then(function(t){if(t!=='ok')throw(r.status==400?t:'that board needs its firmware updated first')})})}
 function each(a,fn){return a.reduce(function(p,x,i){return p.then(function(){return fn(x,i)})},Promise.resolve())}
 function say(m,e){return function(x){m.textContent=typeof x=='string'?x:(e||'Something went wrong.')}}
+function nm(f){return 'Flier '+f.n+(f.name?' "'+f.name+'"':'')}
+function boxes(){list().then(function(j){var c=$('ck');c.textContent='';if(!j.fliers.length){c.innerHTML='<small>No fliers saved on this board yet.</small>';return}
+j.fliers.forEach(function(f){var l=document.createElement('label'),i=document.createElement('input');l.style.cssText='display:flex;gap:8px;align-items:center;margin:2px 0;font-weight:400';
+i.type='checkbox';i.checked=true;i.value=f.n;i.style.width='auto';l.appendChild(i);l.appendChild(document.createTextNode(nm(f)));c.appendChild(l)})}).catch(function(){$('ck').innerHTML='<small>Could not read the fliers.</small>'})}
+boxes();
+function picked(fl){var on={};[].forEach.call(document.querySelectorAll('#ck input:checked'),function(i){on[i.value]=1});return fl.filter(function(f){return on[f.n]})}
 function find(){var s=$('cb');s.innerHTML='<option value="">Searching&hellip;</option>';
 fetch('/boards',{cache:'no-store'}).then(function(r){return r.json()}).then(function(b){s.innerHTML=b.length?'':'<option value="">No other boards found</option>';
-b.forEach(function(x){var o=document.createElement('option');o.value=x.ip;o.textContent=x.name+' ('+x.ip+')';s.appendChild(o)})}).catch(function(){s.innerHTML='<option value="">Search failed</option>'})}
+b.forEach(function(x){var o=document.createElement('option');o.value=x.ip;o.textContent=x.name+' ('+x.ip+')';s.appendChild(o);
+fetch('http://'+x.ip+'/fliers.json',{cache:'no-store'}).then(function(r){return r.json()}).then(function(j){o.textContent=x.name+' ('+x.ip+') \u00b7 '+(j.printer||'no printer plugged in')}).catch(function(){})})}).catch(function(){s.innerHTML='<option value="">Search failed</option>'})}
 $('cf').onclick=find;find();
 $('cs').onclick=function(){var m=$('cm'),t=($('ca').value.trim()||$('cb').value).replace(/^https?:\/\//,'').replace(/\/+$/,'');
 if(!t){m.textContent='Pick a board or type its address first.';return}
 if(t==location.host){m.textContent="That's this board.";return}
 var base='http://'+t,fl,btn=this;
-list().then(function(j){fl=j.fliers;if(!fl.length)throw 'No fliers saved on this board yet.';
+var me;list().then(function(j){me=j;fl=picked(j.fliers);if(!j.fliers.length)throw 'No fliers saved on this board yet.';if(!fl.length)throw 'Tick at least one flier first.';
 return fetch(base+'/fliers.json',{cache:'no-store'}).then(function(r){return r.json()}).catch(function(){throw "Couldn't reach that board. Is it on, on the same Wi-Fi, and updated?"})})
-.then(function(o){if(!confirm('Send '+fl.length+' flier(s) to '+(o.board||t)+'? Fliers in the same slots on that board are replaced.'))throw 'Cancelled.';
+.then(function(o){var old={};(o.fliers||[]).forEach(function(f){old[f.n]=f});
+var msg='Send to '+(o.board||t)+' ('+(o.printer||'no printer plugged in')+')?\n\nCopying: '+fl.map(nm).join(', ')+'\n\nOn that board this replaces: '+fl.map(function(f){return old[f.n]?nm(old[f.n]):'Flier '+f.n+' (empty)'}).join(', ');
+if(o.lang&&me.lang&&o.lang!=me.lang)msg+='\n\nCareful: that board is set to '+o.lang.toUpperCase()+' and this one to '+me.lang.toUpperCase()+', so these fliers will probably print garbage there.';
+if(!confirm(msg))throw 'Cancelled.';
 btn.disabled=true;return each(fl,function(f,i){m.textContent='Sending '+(i+1)+' of '+fl.length+'...';return get(f.n).then(function(b){return put(base,f,b)})})})
 .then(function(){m.textContent='Done. Sent '+fl.length+' flier(s).'}).catch(say(m,"Sending failed. Check the other board is on and try again.")).then(function(){btn.disabled=false})};
 $('bd').onclick=function(){var m=$('bm'),meta,parts=[];
-list().then(function(j){meta=j;if(!j.fliers.length)throw 'No fliers saved on this board yet.';m.textContent='Reading fliers...';
+list().then(function(j){meta=j;j.fliers=picked(j.fliers);if(!j.fliers.length)throw 'Tick at least one flier first.';m.textContent='Reading fliers...';
 return each(j.fliers,function(f){return get(f.n).then(function(b){f.size=b.size;parts.push(b)})})})
 .then(function(){var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([MAGIC+'\n',JSON.stringify(meta)+'\n'].concat(parts)));
 a.download=(meta.board||'btl')+'-fliers.btlfliers';document.body.appendChild(a);a.click();a.remove();m.textContent='Saved '+meta.fliers.length+' flier(s) to your Downloads.'}).catch(say(m,'Backup failed.'))};
@@ -1260,7 +1325,7 @@ static String jsonEsc(const String &s) {
 
 // Which fliers this board holds. Readable from another board's page, so it can check before sending.
 void handleFliersJson() {
-  String j = "{\"board\":\"" + hostName + "\",\"version\":\"" FIRMWARE_VERSION "\",\"fliers\":[";
+  String j = "{\"board\":\"" + hostName + "\",\"version\":\"" FIRMWARE_VERSION "\",\"printer\":\"" + jsonEsc(printerReady ? printerName : String("")) + "\",\"lang\":\"" + jsonEsc(cfgLang) + "\",\"fliers\":[";
   bool first = true;
   for (int n = 1; n <= FLIER_COUNT; n++) {
     size_t z = flierSize(n);
@@ -1449,7 +1514,7 @@ void handleRoot() {
     }
     h += FPSTR(FLIER_JS);
     h += "</div>";
-    if (fsReady) h += FPSTR(COPY_TOOL);
+    if (fsReady) { h += FPSTR(FILE_TOOL); h += FPSTR(COPY_TOOL); }
     h += "<div class=card><b>Extra buttons</b> <small>(optional)</small><br><small>Wire a push button between the pin shown and <b>GND</b>. No resistors needed. "
          "Click to print: click 3 times for 3 copies (up to " + String(MAX_CLICKS) + "). The light flashes white for each click it counts. "
          "Hold 2 seconds = that flier's batch. Press any button to stop. (The board's BOOT button is different: its clicks pick the flier.)</small><form method=post action=/buttons>";
